@@ -1,0 +1,21 @@
+{
+  "name": "fb-support-zalo-oa",
+  "version": "1.0.0",
+  "description": "F&B customer support bot for Zalo Official Account — webhook, intent classifier, seed-grounded food recommender, Zalo send API, SQLite persistence.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/",
+    "test:e2e": "node scripts/test-webhook.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
