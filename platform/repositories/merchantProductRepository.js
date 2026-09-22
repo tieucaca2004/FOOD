@@ -42,4 +42,34 @@ export class MerchantProductRepository {
       });
     return this.findById(lastInsertRowid);
   }
+
+  setAvailability(productId, available) {
+    this.db
+      .prepare(`UPDATE merchant_products SET available = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(available ? 1 : 0, productId);
+    return this.findById(productId);
+  }
+
+  update(productId, patch) {
+    const current = this.findById(productId);
+    this.db
+      .prepare(
+        `UPDATE merchant_products SET
+           name = ?, category_id = ?, description = ?, price = ?, image_url = ?,
+           available = ?, sort_order = ?, keywords_json = ?, updated_at = datetime('now')
+         WHERE id = ?`
+      )
+      .run(
+        patch.name ?? current.name,
+        patch.categoryId !== undefined ? patch.categoryId : current.category_id,
+        patch.description !== undefined ? patch.description : current.description,
+        patch.price ?? current.price,
+        patch.imageUrl !== undefined ? patch.imageUrl : current.image_url,
+        patch.available !== undefined ? (patch.available ? 1 : 0) : current.available ? 1 : 0,
+        patch.sortOrder ?? current.sort_order,
+        patch.keywords !== undefined ? JSON.stringify(patch.keywords) : JSON.stringify(current.keywords),
+        productId
+      );
+    return this.findById(productId);
+  }
 }

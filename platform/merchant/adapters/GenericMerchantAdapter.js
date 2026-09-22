@@ -7,12 +7,17 @@ import { stripAccents } from "../../../src/nlp/normalize.js";
  * (platform DB) and its cart/order live in the platform's own generic
  * orders tables. This is what spec §31 means by "thêm merchant B chỉ cần
  * create/seed/activate — không sửa code platform".
+ *
+ * Phase 3 cutover: menu/product reads go through MenuService and merchant
+ * record reads go through MerchantDataService (same access-boundary
+ * pattern as Phase 1/2 — no repository accessed directly here anymore).
  */
 export class GenericMerchantAdapter extends MerchantModule {
-  constructor({ merchantId, repos }) {
+  constructor({ merchantId, menuService, merchantDataService }) {
     super();
     this._merchantId = merchantId;
-    this.repos = repos;
+    this.menuService = menuService;
+    this.merchantDataService = merchantDataService;
   }
 
   get merchantId() {
@@ -21,7 +26,7 @@ export class GenericMerchantAdapter extends MerchantModule {
 
   async searchProducts(queryText) {
     const query = stripAccents(queryText || "");
-    const products = this.repos.merchantProducts.listByMerchant(this._merchantId, { includeUnavailable: true });
+    const products = this.menuService.listProducts(this._merchantId, { includeUnavailable: true });
 
     return products
       .map((p) => {
@@ -37,8 +42,8 @@ export class GenericMerchantAdapter extends MerchantModule {
   }
 
   async getMenuSummary() {
-    const merchant = this.repos.merchants.getById(this._merchantId);
-    const products = this.repos.merchantProducts.listByMerchant(this._merchantId);
+    const merchant = this.merchantDataService.getById(this._merchantId);
+    const products = this.menuService.listProducts(this._merchantId, { includeUnavailable: false });
     return {
       name: merchant.name,
       address: merchant.address,

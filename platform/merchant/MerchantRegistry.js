@@ -41,6 +41,6 @@ export function buildAtieuAdapterFactory({ services, router }) {
   return (merchant) => new AtieuMerchantAdapter({ merchantId: merchant.merchant_id, services, router });
 }
 
-export function buildGenericAdapterFactory({ repos }) {
-  return (merchant) => new GenericMerchantAdapter({ merchantId: merchant.merchant_id, repos });
+export function buildGenericAdapterFactory({ menuService, merchantDataService }) {
+  return (merchant) => new GenericMerchantAdapter({ merchantId: merchant.merchant_id, menuService, merchantDataService });
 }
