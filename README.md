@@ -1,150 +1,257 @@
-# F&B Support Bot cho Zalo OA
+# Zalo OA Ordering Engine — Hủ Tiếu Xào A Tiểu
 
-Bot CS ẩm thực chạy trên **Zalo Official Account**, dựa theo kiến trúc mô tả trong
-`F_B_Support_System_v1.md` (Zalo webhook → phân loại intent → responder trả lời
-theo dữ liệu quán ăn đã seed → gửi lại qua Zalo → lưu Postgres/SQLite).
+Backend production cho luồng: khách tìm quán trên Zalo → quan tâm OA → mở chat
+→ xem menu → hỏi/chọn món bằng ngôn ngữ tự nhiên → thêm/sửa giỏ hàng → xác nhận
+đơn → hệ thống tạo Order → quán nhận thông báo.
 
-Đây là bản **gọn, tự chứa** của kiến trúc đó — một service Node.js duy nhất
-(thay cho cụm Hermes + Vellum daemon nhiều host trong tài liệu gốc), dùng
-SQLite tại chỗ thay Postgres, và không cần hạ tầng riêng để chạy được ngay.
-
-## Luồng xử lý
+## 1. Kiến trúc
 
 ```
-Zalo OA  →  POST /zalo/webhook  →  classifyIntent()  →  buildReply()
-                                                            │
-                                        (nếu là hỏi quán ăn) ▼
-                                        đọc data/restaurants.json (seed)
-                                        → CHỈ liệt kê quán có trong seed,
-                                          không tự bịa
-                                                            │
-                                                            ▼
-                                        sendTextMessage() → Zalo Send API
-                                                            │
-                                                            ▼
-                                        lưu session + message vào SQLite
+Zalo OA
+  │ webhook
+  ▼
+Webhook Controller (src/channel/zalo/webhookController.js)
+  │ verify (best-effort, off by default) → normalize → idempotency reserve
+  ▼
+Message Normalizer (src/channel/zalo/messageNormalizer.js)
+  ▼
+Session Manager (src/services/sessionService.js)
+  ▼
+Intent Engine (src/nlp/intentEngine.js — rule-based, không gọi LLM)
+  ▼
+Business Router (src/router/businessRouter.js)
+  ├── FAQ (store_location / opening_hours / payment_method / delivery / promotion)
+  ├── Menu     → MenuService
+  ├── Cart     → CartService
+  ├── Order    → OrderService
+  └── Human handoff
+  ▼
+Domain Services (src/services/*) — toàn bộ tính giá/tổng/state đều ở đây,
+KHÔNG ở classifier, KHÔNG ở AI.
+  ▼
+Repositories (src/repositories/*) — SQL duy nhất nằm ở đây, không rải trong
+controller/service.
+  ▼
+SQLite (better-sqlite3, migration-based schema, src/db/)
+  ▼
+Notification Service (Telegram nếu cấu hình, log nếu chưa — không bao giờ báo
+"đã gửi" khi chưa gửi được)
+  ▼
+Zalo Send API (src/channel/zalo/client.js — retry + timeout + không retry lỗi 4xx)
 ```
 
-Nguyên tắc giữ từ tài liệu gốc: **không bịa dữ liệu quán ăn** — bot chỉ liệt
-kê đúng những gì có trong `data/restaurants.json`. Nếu câu hỏi không khớp
-quán nào, bot xin thêm thông tin thay vì từ chối/redirect Google Maps.
+**AI layer** (`src/ai/`) là lớp hiểu ngôn ngữ tuỳ chọn, đứng ngoài luồng quyết
+định: mặc định `AI_PROVIDER=null` — không gọi LLM nào, toàn bộ intent/entity
+đến từ rule engine. Nếu bật `AI_PROVIDER=anthropic`, AI chỉ được dùng để (a)
+gợi ý intent/entity cho câu rule engine không phân loại được, và (b) viết lại
+câu trả lời tự nhiên hơn — luôn giữ nguyên số liệu đã tính. AI không bao giờ
+được gọi để quyết định giá, tổng tiền, tồn tại sản phẩm, hay trạng thái đơn —
+xem hợp đồng trong `src/ai/AIProvider.js`.
 
-## Cài đặt
+## 2. Database schema
+
+SQLite, quản lý qua migration (`src/db/migrations/001_init.sql`), abstraction
+qua repository layer (`src/repositories/`) — không có SQL rải trong
+controller. Muốn chuyển Postgres: chỉ cần viết lại các repository, phần
+service/router/API giữ nguyên.
+
+Bảng: `customers`, `sessions`, `messages`, `webhook_events` (idempotency),
+`categories`, `products`, `product_options`, `carts`, `cart_items`, `orders`,
+`order_items`, `order_events`, `business_settings`, `promotions`,
+`notifications`.
+
+Toàn bộ cột tiền là **integer VND** — không float, không nhận giá/tổng từ
+client.
+
+## 3. Cài đặt
 
 ```bash
 npm install
 cp .env.example .env
+npm run migrate   # tạo schema
+npm run seed      # nạp categories/products/business_settings — idempotent
+npm start
 ```
 
-Điền vào `.env`:
+Điền `.env` theo bảng dưới (chi tiết từng biến xem `.env.example`):
 
-| Biến | Ý nghĩa |
+| Nhóm | Biến chính |
 |---|---|
-| `ZALO_OA_ACCESS_TOKEN` | Access token của Zalo OA (lấy từ [oa.zalo.me](https://oa.zalo.me) → app của bạn) |
-| `ZALO_OA_APP_SECRET` | App secret, dùng nếu bạn muốn tự verify signature webhook |
-| `PORT` | Cổng chạy server (default `3900`) |
-| `MIN_CONFIDENCE` | Ngưỡng confidence để nhận intent (default `0.60`, giống Hermes trong tài liệu gốc) |
-| `ANTHROPIC_API_KEY` | (tuỳ chọn) Nếu có, Claude sẽ viết lại câu trả lời tự nhiên hơn — nhưng chỉ dựa đúng trên danh sách quán đã match, không được thêm quán khác. Không set thì bot dùng template có sẵn. |
-| `DB_PATH` | Đường dẫn file SQLite (default `./data/support.db`) |
+| Zalo OA | `ZALO_OA_ACCESS_TOKEN`, `ZALO_OA_SECRET_KEY`, `WEBHOOK_PATH` |
+| AI (tuỳ chọn) | `AI_PROVIDER`, `ANTHROPIC_API_KEY` |
+| DB | `SQLITE_PATH` |
+| Notification | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` |
+| Business | `ORDER_CODE_PREFIX`, `MAX_ITEM_QUANTITY` |
 
-Chạy server:
+## 4. Menu / Seed data
 
-```bash
-npm start        # production
-npm run dev       # auto-reload khi sửa code
-```
+`data/seed/products.json` hiện có **đúng 4 món đã được xác nhận**:
 
-## Kết nối với Zalo OA
+| Món | Giá |
+|---|---|
+| Hủ Tiếu Xào Bò | 65.000đ |
+| Hủ Tiếu Xào Hải Sản | 75.000đ |
+| Hủ Tiếu Xào Thập Cẩm | 60.000đ |
+| Hủ Tiếu Xào Đặc Biệt | 85.000đ |
 
-1. Deploy service này lên một host có domain HTTPS công khai (hoặc dùng
-   ngrok/cloudflared khi test), route `/zalo/webhook` phải public — ví dụ
-   nginx reverse-proxy `https://yourdomain.com/zalo/webhook` →
-   `http://127.0.0.1:3900/zalo/webhook`, tương tự mục 4.1 trong tài liệu gốc.
-2. Vào [Zalo OA Manage](https://oa.zalo.me) → chọn OA → **Webhook** → khai
-   báo URL `https://yourdomain.com/zalo/webhook` và các event cần
-   (`user_send_text` là bắt buộc cho bot này).
-3. Lấy **Access Token** từ OA (hoặc qua OAuth flow nếu bạn dùng app riêng)
-   và điền vào `.env`.
-4. Zalo tính **reply quota** — chỉ gửi được reply trong khoảng thời gian sau
-   khi user nhắn trước (giống mục 4.3 tài liệu gốc).
+Hệ thống **không tự bịa** món/giá/khuyến mãi nào khác. Xem
+`data/seed/NEEDS_OWNER_INPUT.md` — danh sách dữ liệu chủ quán cần bổ sung
+(phí giao hàng thật, giờ mở cửa thật, địa chỉ, SĐT quán, khuyến mãi...) trước
+khi go-live. Sau khi sửa seed, chạy lại `npm run seed` (an toàn, idempotent,
+upsert theo `sku`/`name`/`key`, không xoá cart/order hiện có).
 
-## Seed dữ liệu quán ăn
-
-Sửa `data/restaurants.json` — mỗi entry:
-
-```json
-{
-  "id": "slug-duy-nhat",
-  "name": "Tên quán",
-  "dish_tags": ["từ khoá món ăn dùng để match"],
-  "area": "Khu vực/thành phố",
-  "address": "Địa chỉ đầy đủ",
-  "price_range": "khoảng giá",
-  "notes": "ghi chú thêm (optional)"
-}
-```
-
-> Dữ liệu 4 quán có sẵn trong repo là **dữ liệu mẫu để test** — hãy thay bằng
-> danh sách quán thật đã xác minh trước khi chạy production, để tránh đúng
-> lỗi mà tài liệu gốc cảnh báo: bot liệt kê thông tin sai/chưa xác minh.
-
-## Test E2E cục bộ
+## 5. Test
 
 ```bash
-npm start                 # terminal 1
-npm run test:e2e          # terminal 2 — gửi câu "quán cháo vịt" mẫu, in kết quả
+npm test
 ```
 
-Kiểm tra thủ công thêm:
+54 test cases, 3 tầng:
+
+- **Unit** (`test/unit/`): money helpers, order state machine, intent
+  classifier — chạy không cần DB.
+- **Integration** (`test/integration/`): CartService, OrderService,
+  NotificationService trên SQLite in-memory.
+- **E2E** (`test/e2e/`): toàn bộ hội thoại (chào → menu → thêm món → giỏ →
+  checkout → xác nhận → notification), webhook HTTP thật (idempotency
+  retry, Zalo send failure, DB failure, REST validation).
+
+Đã verify PASS tại thời điểm viết README này: `npm test` → 54/54 pass.
+
+**Chưa thể test với credential thật (BLOCKED):**
+
+- Gửi tin thật qua Zalo Send API — cần `ZALO_OA_ACCESS_TOKEN` thật. Test hiện
+  tại verify hệ thống xử lý đúng khi token thiếu/lỗi (fails cleanly, không
+  giả vờ đã gửi). Cần test lại với OA thật trước khi go-live.
+- Webhook signature verification (`src/channel/zalo/verifySignature.js`) —
+  scheme hiện là best-effort dựa trên tài liệu tham khảo, **chưa xác nhận**
+  đúng header/algorithm thật của Zalo OA. Đang tắt mặc định
+  (`ENABLE_ZALO_SIGNATURE_CHECK=false`). Phải test với webhook thật từ Zalo
+  trước khi bật.
+- Telegram notification thật — cần `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
+  thật. Test hiện tại verify với mock send (thành công + thất bại), có test
+  riêng xác nhận không log "sent" khi chưa cấu hình.
+
+## 6. Zalo OA configuration
+
+1. Deploy service có domain HTTPS công khai (hoặc ngrok khi test).
+2. nginx reverse-proxy `https://yourdomain.com/zalo/webhook` →
+   `http://127.0.0.1:3900/zalo/webhook`.
+3. Trên [oa.zalo.me](https://oa.zalo.me) → OA của bạn → Webhook → khai báo
+   URL trên, đăng ký event `user_send_text` (bắt buộc).
+4. Lấy Access Token, điền `ZALO_OA_ACCESS_TOKEN`.
+5. Zalo tính reply quota theo cửa sổ thời gian sau tin khách gửi — quán cần
+   trả lời trong khung đó (hệ thống gửi realtime nên không phải lo, chỉ cần
+   không để webhook bị lỗi/timeout).
+
+## 7. REST API
+
+```
+GET    /api/menu
+GET    /api/menu/:id
+POST   /api/cart/items          { customerId, productId, quantity }
+PATCH  /api/cart/items/:id      { quantity }
+DELETE /api/cart/items/:id
+GET    /api/cart/:customerId
+POST   /api/orders              { customerId, fulfillmentType, phone?, address? }
+GET    /api/orders/:id
+PATCH  /api/orders/:id/status   { status, note? }
+GET    /api/customers/:id
+GET    /api/health
+GET    /api/readiness
+POST   /zalo/webhook
+```
+
+Server luôn tự tra giá/tồn tại sản phẩm và tự tính tổng — client chỉ gửi
+`productId` + `quantity`; mọi `price`/`total` gửi kèm trong body đều bị bỏ
+qua.
+
+`POST /api/orders` tạo đơn CONFIRMED ngay (khác chat flow có bước hỏi/xác
+nhận riêng) — vì gọi endpoint này chính là hành động xác nhận từ phía client.
+
+## 8. Notification
+
+Khi order chuyển CONFIRMED, `NotificationService` gửi Telegram nếu
+`TELEGRAM_BOT_TOKEN`+`TELEGRAM_CHAT_ID` được cấu hình; nếu không, ghi log +
+lưu record `notifications.status = 'skipped_no_channel'` — **không bao giờ**
+báo đã gửi khi chưa gửi. Không gửi notification trước khi order đạt
+CONFIRMED (có test riêng xác nhận điều này).
+
+## 9. Order state machine
+
+```
+DRAFT → PENDING_CONFIRMATION → CONFIRMED → ACCEPTED → PREPARING → READY → COMPLETED
+CANCELLED: được phép từ DRAFT, PENDING_CONFIRMATION, CONFIRMED, ACCEPTED, PREPARING
+           KHÔNG được phép từ READY, COMPLETED
+```
+
+Mọi transition đi qua `src/domain/orderStateMachine.js` — chuyển trạng thái
+không hợp lệ trả lỗi `INVALID_TRANSITION` (HTTP 409), không âm thầm bỏ qua.
+Mỗi transition ghi 1 dòng `order_events`.
+
+## 10. Idempotency
+
+Webhook Zalo có thể retry — `webhook_events.message_id` có UNIQUE constraint,
+request thứ 2 với cùng `message_id` trả về response đã cache, không xử lý
+lại, không tạo đơn thứ 2. Có test HTTP-level xác nhận việc này.
+
+## 11. Security
+
+- Secrets chỉ qua env, không hard-code, `.env` trong `.gitignore`.
+- `src/logger.js` tự động redact field tên chứa `token`/`secret`/`password`/…
+- Rate limit in-memory theo IP cho toàn bộ `/api` + webhook.
+- Validation tay cho mọi input REST (`src/api/middleware/validate.js`) —
+  reject quantity ≤0, không phải integer, vượt `MAX_ITEM_QUANTITY`; reject
+  product id không tồn tại; không bao giờ tin giá/tổng từ client hay từ AI.
+- better-sqlite3 dùng prepared statements có tham số hoá — không nối chuỗi
+  SQL từ input người dùng.
+
+## 12. Deployment
 
 ```bash
-curl -s -X POST http://127.0.0.1:3900/zalo/webhook \
-  -H 'content-type: application/json' \
-  -d '{"event_name":"user_send_text","sender":{"id":"test-user"},"message":{"text":"gần đây có quán cháo vịt nào ngon không?"},"timestamp":0,"message_id":"m1"}'
+docker build -t atieu-ordering-engine .
+docker run -d --name atieu \
+  --env-file .env \
+  -v atieu-data:/data \
+  -p 3900:3900 \
+  atieu-ordering-engine
 ```
 
-Response mẫu:
+Image tự chạy `migrate` + `seed` (idempotent) trước khi start server. Nếu
+`better-sqlite3` build native fail trên máy bạn (thiếu prebuilt binary cho
+kiến trúc lạ), cài `build-essential python3` trước `npm ci`.
 
-```json
-{
-  "status": "processed",
-  "support_session_id": "...",
-  "intent": "support_food_recommendation",
-  "confidence": 0.9,
-  "draft_reply": "Dạ có, em gợi ý mấy quán sau nha: ...",
-  "responder": "mary_food_bot",
-  "respond_error": null
-}
-```
+Graceful shutdown: `SIGTERM`/`SIGINT` đóng HTTP server + DB connection trước
+khi exit (`src/server.js`).
 
-`respond_error` sẽ báo lỗi nếu `ZALO_OA_ACCESS_TOKEN` chưa đúng — khi test
-cục bộ không có token thật thì lỗi này là bình thường, phần intent/seed vẫn
-chạy đúng.
+## 13. Production verification checklist
 
-## Cấu trúc project
+Trước khi coi là go-live:
+
+- [ ] `npm test` PASS (đã verify: 54/54)
+- [ ] `npm run migrate && npm run seed` PASS trên DB thật
+- [ ] Webhook nhận được tin thật từ Zalo OA (không chỉ curl giả)
+- [ ] Gửi reply thật thành công qua Zalo Send API (cần access token thật —
+      BLOCKED cho tới khi có)
+- [ ] Chủ quán xác nhận dữ liệu trong `NEEDS_OWNER_INPUT.md`
+- [ ] Notification Telegram thật nhận được khi có đơn CONFIRMED
+- [ ] Backup định kỳ file SQLite (`SQLITE_PATH`)
+
+## 14. Cấu trúc thư mục
 
 ```
 src/
-  server.js               Express app, route webhook chính
-  config.js                Load .env
-  db.js                    SQLite schema + helpers (sessions/messages)
-  classifier/intent.js     Rule-based intent classifier
-  responder/
-    index.js               Router intent → reply
-    foodRecommender.js      Match seed data theo từ khoá/khu vực
-    llm.js                  (optional) polish câu trả lời bằng Claude, luôn grounded theo seed
-  zalo/client.js           Gửi message qua Zalo OA Send API
-data/restaurants.json      Seed dữ liệu quán ăn — SỬA FILE NÀY để thêm quán thật
-scripts/test-webhook.js    Script test E2E nhanh
+  config.js, logger.js, server.js
+  db/            migrations, connection, seed
+  domain/        money, order state machine, order code, checkout field parsers — pure logic, no I/O
+  repositories/  toàn bộ SQL
+  services/      business logic (cart/order/menu/customer/session/notification)
+  nlp/           rule-based intent classifier + entity helpers
+  ai/            optional AI provider abstraction (Null/Anthropic)
+  router/        BusinessRouter — nối intent -> domain services
+  channel/zalo/  webhook controller, message normalizer, send client, signature check
+  api/           Express app, REST routes, middleware
+data/seed/       categories/products/business_settings — sửa ở đây để đổi menu/giá
+test/            unit / integration / e2e
+scripts/         migrate.js, seed.js
 ```
-
-## Mở rộng
-
-- Thêm intent mới: sửa `src/classifier/intent.js`, thêm rule + xử lý tương
-  ứng trong `src/responder/index.js`.
-- Đổi seed store sang Postgres nếu cần scale nhiều host giống tài liệu gốc —
-  chỉ cần thay `foodRecommender.js` đọc từ DB thay vì file JSON, phần còn lại
-  không đổi.
-- Verify webhook signature: Zalo OA không luôn gửi header ký riêng cho route
-  message — nếu cần, dùng `ZALO_OA_APP_SECRET` để verify theo tài liệu Zalo
-  OA API chính thức trước khi xử lý `req.body`.

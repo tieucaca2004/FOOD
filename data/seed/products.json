@@ -1,0 +1,42 @@
+[
+  {
+    "sku": "HTX-BO",
+    "name": "Hủ Tiếu Xào Bò",
+    "category": "Hủ Tiếu Xào",
+    "description": "Hủ tiếu xào với thịt bò.",
+    "price": 65000,
+    "available": true,
+    "sort_order": 1,
+    "keywords": ["bo", "hu tieu bo", "hu tieu xao bo"]
+  },
+  {
+    "sku": "HTX-HAISAN",
+    "name": "Hủ Tiếu Xào Hải Sản",
+    "category": "Hủ Tiếu Xào",
+    "description": "Hủ tiếu xào với hải sản.",
+    "price": 75000,
+    "available": true,
+    "sort_order": 2,
+    "keywords": ["hai san", "haisan", "hu tieu hai san"]
+  },
+  {
+    "sku": "HTX-THAPCAM",
+    "name": "Hủ Tiếu Xào Thập Cẩm",
+    "category": "Hủ Tiếu Xào",
+    "description": "Hủ tiếu xào thập cẩm.",
+    "price": 60000,
+    "available": true,
+    "sort_order": 3,
+    "keywords": ["thap cam", "thapcam", "hu tieu thap cam"]
+  },
+  {
+    "sku": "HTX-DACBIET",
+    "name": "Hủ Tiếu Xào Đặc Biệt",
+    "category": "Hủ Tiếu Xào",
+    "description": "Hủ tiếu xào đặc biệt.",
+    "price": 85000,
+    "available": true,
+    "sort_order": 4,
+    "keywords": ["dac biet", "dacbiet", "hu tieu dac biet"]
+  }
+]

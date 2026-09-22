@@ -1,14 +1,15 @@
 {
-  "name": "fb-support-zalo-oa",
+  "name": "atieu-zalo-ordering-engine",
   "version": "1.0.0",
-  "description": "F&B customer support bot for Zalo Official Account — webhook, intent classifier, seed-grounded food recommender, Zalo send API, SQLite persistence.",
+  "description": "Zalo OA ordering engine for Hủ Tiếu Xào A Tiểu — webhook, intent engine, menu/cart/order domain services, order state machine, Zalo Send API, SQLite persistence.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test test/",
-    "test:e2e": "node scripts/test-webhook.js"
+    "test": "node --test test/unit/*.test.js test/integration/*.test.js test/e2e/*.test.js",
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed.js"
   },
   "engines": {
     "node": ">=18"
