@@ -35,12 +35,46 @@ import { platformConfig } from "../config.js";
  *   has no option/variant columns yet; nothing here assumes their absence
  *   in a way that would block adding them (a future migration can add an
  *   options_json/product_option_id column without touching this contract).
+ *
+ * SECURITY BOUNDARY (spec §56 — "who is authorized to operate this
+ * cart?"): every public method's first parameter, `customerId`, is the
+ * caller's identity as already authenticated/resolved by whatever layer
+ * sits above this service (platform_customers.id — the same identity
+ * Phase 1/2's MerchantDataService-adjacent services use). This class does
+ * not perform authentication itself and never will in Phase 5 — it only
+ * enforces that the given identity actually owns the cart/item being
+ * touched. A caller that can forge its own customerId has a problem
+ * outside this class's boundary (session/auth layer); within this
+ * boundary, customerId is trusted exactly as much as the caller is.
+ *
+ * INPUT VALIDATION (security gate §45/§53): every id-shaped parameter is
+ * checked to be a positive integer (merchantId: a non-empty string)
+ * before it ever reaches a repository call or a dependency
+ * (MenuService/MerchantDataService) — this is what stops a malformed
+ * value (undefined, NaN, an object, a SQL-injection-shaped string) from
+ * ever producing a raw driver exception that could leak internal details
+ * to the caller. A malformed id always resolves to the same domain error
+ * the resource's genuine absence would (e.g. a non-integer cartId ->
+ * CART_NOT_FOUND) — never a different code, so no extra information is
+ * leaked either way.
  */
 export class CartError extends Error {
   constructor(code, message, status = 400) {
     super(message);
     this.code = code;
     this.status = status;
+  }
+}
+
+function requirePositiveInt(value, code, message) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new CartError(code, message, code === "INVALID_CALLER_IDENTITY" ? 401 : 404);
+  }
+}
+
+function requireNonEmptyString(value, code, message) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new CartError(code, message, 404);
   }
 }
 
@@ -56,6 +90,7 @@ export class CartService {
   }
 
   _requireRoutableMerchant(merchantId) {
+    requireNonEmptyString(merchantId, "MERCHANT_NOT_FOUND", "merchantId must be a non-empty string");
     const merchant = this.merchantDataService.getById(merchantId);
     if (!merchant) throw new CartError("MERCHANT_NOT_FOUND", `Merchant ${merchantId} not found`, 404);
     if (!isAccountDiscoverable({ accountStatus: merchant.account_status, active: merchant.active })) {
@@ -65,6 +100,9 @@ export class CartService {
   }
 
   _ownedCart(customerId, cartId) {
+    requirePositiveInt(customerId, "INVALID_CALLER_IDENTITY", "customerId must be a positive integer");
+    requirePositiveInt(cartId, "CART_NOT_FOUND", `Cart ${cartId} not found`);
+
     const cart = this.repos.carts.getById(cartId);
     if (!cart) throw new CartError("CART_NOT_FOUND", `Cart ${cartId} not found`, 404);
     if (cart.customer_id !== customerId) {
@@ -86,6 +124,9 @@ export class CartService {
   // status changes (spec §12's "discovery visibility vs cart
   // authorization can differ").
   createCart(customerId, merchantId) {
+    requirePositiveInt(customerId, "INVALID_CALLER_IDENTITY", "customerId must be a positive integer");
+    requireNonEmptyString(merchantId, "MERCHANT_NOT_FOUND", "merchantId must be a non-empty string");
+
     const existing = this.repos.carts.getActiveByCustomerAndMerchant(customerId, merchantId);
     if (existing) return this._hydrate(existing);
     this._requireRoutableMerchant(merchantId);
@@ -110,6 +151,7 @@ export class CartService {
 
   getItem(customerId, cartId, itemId) {
     this._ownedCart(customerId, cartId);
+    requirePositiveInt(itemId, "CART_ITEM_NOT_FOUND", `Item ${itemId} not found in cart ${cartId}`);
     const item = this.repos.carts.findItemById(itemId);
     if (!item || item.cart_id !== cartId) {
       throw new CartError("CART_ITEM_NOT_FOUND", `Item ${itemId} not found in cart ${cartId}`, 404);
@@ -124,16 +166,22 @@ export class CartService {
 
   // Caller supplies merchantId + productId + quantity only — price is
   // always looked up server-side via MenuService, never trusted from a
-  // client/AI-supplied unit_price or subtotal field (those fields are
-  // simply never read by this method, whatever the caller sends).
+  // client/AI-supplied unit_price or subtotal field. There is no such
+  // parameter in this method's signature at all, so nothing a caller
+  // sends beyond these five positional arguments is ever read, let alone
+  // persisted (mass-assignment is structurally impossible here, not just
+  // filtered — spec §47).
   addItem(customerId, cartId, merchantId, productId, quantity) {
     if (!isValidQuantity(quantity, platformConfig.cartMaxItemQuantity)) {
       throw new CartError("INVALID_QUANTITY", "Quantity must be a positive integer within the allowed limit");
     }
     const cart = this._ownedCart(customerId, cartId);
+
+    requireNonEmptyString(merchantId, "MERCHANT_NOT_FOUND", "merchantId must be a non-empty string");
     if (merchantId !== cart.merchant_id) {
       throw new CartError("CART_MERCHANT_MISMATCH", `Cart ${cartId} belongs to merchant ${cart.merchant_id}, not ${merchantId}`);
     }
+    requirePositiveInt(productId, "PRODUCT_NOT_FOUND", `Product ${productId} not found`);
 
     // Ownership + existence in one call — MenuService.getProduct()
     // deliberately reports both "doesn't exist" and "belongs to another
@@ -162,6 +210,14 @@ export class CartService {
         this.repos.carts.setItemQuantity(existing.id, newQty);
         this.repos.carts.touch(cartId);
       } else {
+        // Resource-abuse guard (security gate §50): a bounded number of
+        // distinct line items per cart — checked only on the new-item
+        // path, since updating an existing line's quantity never grows
+        // the item count.
+        const currentItemCount = this.repos.carts.listItems(cartId).length;
+        if (currentItemCount >= platformConfig.cartMaxItems) {
+          throw new CartError("CART_ITEM_LIMIT_EXCEEDED", `Cart ${cartId} already holds the maximum of ${platformConfig.cartMaxItems} distinct items`);
+        }
         this.repos.carts.addItem(cartId, cart.merchant_id, productId, product.name, product.price, quantity);
       }
     });
@@ -173,6 +229,7 @@ export class CartService {
   // quantity === 0 removes the item (documented choice, spec §14).
   updateItemQuantity(customerId, cartId, itemId, quantity) {
     this._ownedCart(customerId, cartId);
+    requirePositiveInt(itemId, "CART_ITEM_NOT_FOUND", `Item ${itemId} not found in cart ${cartId}`);
     const item = this.repos.carts.findItemById(itemId);
     if (!item || item.cart_id !== cartId) {
       throw new CartError("CART_ITEM_NOT_FOUND", `Item ${itemId} not found in cart ${cartId}`, 404);
@@ -193,6 +250,7 @@ export class CartService {
 
   removeItem(customerId, cartId, itemId) {
     this._ownedCart(customerId, cartId);
+    requirePositiveInt(itemId, "CART_ITEM_NOT_FOUND", `Item ${itemId} not found in cart ${cartId}`);
     const item = this.repos.carts.findItemById(itemId);
     if (!item || item.cart_id !== cartId) {
       throw new CartError("CART_ITEM_NOT_FOUND", `Item ${itemId} not found in cart ${cartId}`, 404);

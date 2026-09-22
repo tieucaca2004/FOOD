@@ -25,7 +25,8 @@ export const platformConfig = {
   menuImportUploadDir: process.env.MENU_IMPORT_UPLOAD_DIR || "./data/uploads/menu-imports",
 
   // Generic Cart Engine (Phase 5).
-  cartMaxItemQuantity: Number(process.env.CART_MAX_ITEM_QUANTITY || 50),
+  cartMaxItemQuantity: Number(process.env.CART_MAX_ITEM_QUANTITY || 50), // per line item
+  cartMaxItems: Number(process.env.CART_MAX_ITEMS || 200), // distinct products per cart — resource abuse guard (security gate §50)
 
   dbPath: process.env.PLATFORM_SQLITE_PATH || "./data/platform.db",
 
