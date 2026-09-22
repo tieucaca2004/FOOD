@@ -1,4 +1,4 @@
-import { isDiscoverable } from "../domain/merchantStatus.js";
+import { isAccountDiscoverable } from "../domain/merchantStatus.js";
 
 /**
  * Thin routing layer named to match the architecture doc: given a
@@ -18,8 +18,12 @@ export class MerchantRouter {
     return { merchant, adapter: this.registry.getAdapter(merchantId) };
   }
 
+  // Phase 2 cutover: reads the split account_status/active model instead of
+  // the legacy status string. MerchantRepository.setStatus() dual-writes
+  // both, so this is behaviorally identical to the old check for every
+  // merchant already in the DB.
   isRoutable(merchant) {
-    return Boolean(merchant) && isDiscoverable(merchant.status);
+    return Boolean(merchant) && isAccountDiscoverable({ accountStatus: merchant.account_status, active: merchant.active });
   }
 
   async routeMessage(merchantId, platformCustomerId, text) {

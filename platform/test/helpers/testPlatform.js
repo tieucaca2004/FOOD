@@ -5,6 +5,7 @@ import { NullProvider } from "../../../src/ai/NullProvider.js";
 import { MerchantRegistry, buildAtieuAdapterFactory, buildGenericAdapterFactory } from "../../merchant/MerchantRegistry.js";
 import { MerchantRouter } from "../../merchant/MerchantRouter.js";
 import { DiscoveryEngine } from "../../discovery/DiscoveryEngine.js";
+import { AgentSearchService } from "../../services/agentSearchService.js";
 import { PlatformRouter } from "../../router/PlatformRouter.js";
 import { createPlatformApp } from "../../api/app.js";
 
@@ -16,6 +17,48 @@ import { buildTestContext as buildAtieuTestContext } from "../../../test/helpers
 
 const FREE_PLAN = { plan_id: "free", name: "Free", price: 0, trial_days: null };
 
+// TEST-ONLY generic merchant fixtures — never present in production seed
+// (platform/db/seed.js only ever registers the real ATIEU001). Named to
+// match the spec's own multi-merchant test naming (MERCHANT002/003).
+const GENERIC_FIXTURES = {
+  MERCHANT002: {
+    name: "Merchant 002 (Test Fixture)",
+    sku: "FIX2-HAISAN",
+    productName: "Hủ Tiếu Xào Hải Sản",
+    price: 72000,
+    keywords: ["hai san", "hu tieu hai san"],
+  },
+  MERCHANT003: {
+    name: "Merchant 003 (Test Fixture)",
+    sku: "FIX3-BO",
+    productName: "Hủ Tiếu Xào Bò",
+    price: 68000,
+    keywords: ["bo", "hu tieu bo"],
+  },
+};
+
+function registerGenericFixture(repos, merchantId, status = "ACTIVE") {
+  const fixture = GENERIC_FIXTURES[merchantId];
+  repos.merchants.create({
+    merchantId,
+    name: fixture.name,
+    slug: merchantId.toLowerCase(),
+    module: "generic",
+    status,
+    address: "Nha Trang, Khánh Hòa",
+  });
+  repos.subscriptions.startTrial(merchantId, "free", new Date().toISOString(), new Date(Date.now() + 365 * 86400000).toISOString());
+  const catId = repos.merchantCategories.create(merchantId, "Hủ Tiếu Xào").id;
+  repos.merchantProducts.create(merchantId, {
+    sku: fixture.sku,
+    name: fixture.productName,
+    categoryId: catId,
+    price: fixture.price,
+    available: true,
+    keywords: fixture.keywords,
+  });
+}
+
 /**
  * @param {object} opts
  * @param {boolean} opts.withAtieu register the real A Tiểu module (in-memory instance) as ATIEU001
@@ -23,8 +66,16 @@ const FREE_PLAN = { plan_id: "free", name: "Free", price: 0, trial_days: null };
  *   (test-only, never present in production seed — see platform/db/seed.js)
  *   so multi-merchant discovery/ranking can be verified against more than
  *   one merchant.
+ * @param {string[]} opts.genericFixtureMerchants merchant_ids from
+ *   GENERIC_FIXTURES (e.g. ["MERCHANT002", "MERCHANT003"]) to additionally
+ *   register — each ACTIVE by default; use `repos.merchants.setStatus(...)`
+ *   after building to flip one to SUSPENDED/EXPIRED for exclusion tests.
  */
-export function buildTestPlatform({ withAtieu = true, withGenericFixture = false } = {}) {
+export function buildTestPlatform({
+  withAtieu = true,
+  withGenericFixture = false,
+  genericFixtureMerchants = [],
+} = {}) {
   const db = createPlatformConnection(":memory:");
   runPlatformMigrations(db);
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_plans_name ON plans(plan_id)`);
@@ -83,13 +134,21 @@ export function buildTestPlatform({ withAtieu = true, withGenericFixture = false
     moduleFactories.generic = buildGenericAdapterFactory({ repos });
   }
 
+  if (genericFixtureMerchants.length > 0) {
+    for (const merchantId of genericFixtureMerchants) {
+      registerGenericFixture(repos, merchantId);
+    }
+    moduleFactories.generic = buildGenericAdapterFactory({ repos });
+  }
+
   const registry = new MerchantRegistry({ repos, moduleFactories });
   const merchantRouter = new MerchantRouter(registry);
-  const discovery = new DiscoveryEngine(repos, registry);
-  const router = new PlatformRouter({ services, discovery, merchantRouter, ai });
+  const discovery = new DiscoveryEngine(services.merchantData, registry);
+  const agentSearch = new AgentSearchService({ discovery, registry });
+  const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai });
   const app = createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router });
 
-  return { db, repos, services, ai, registry, merchantRouter, discovery, router, app, atieuCtx };
+  return { db, repos, services, ai, registry, merchantRouter, discovery, agentSearch, router, app, atieuCtx };
 }
 
 export async function startServer(app) {

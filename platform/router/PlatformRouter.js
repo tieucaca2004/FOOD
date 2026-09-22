@@ -26,9 +26,14 @@ function formatMenuSummary(menu) {
 }
 
 export class PlatformRouter {
-  constructor({ services, discovery, merchantRouter, ai }) {
+  constructor({ services, discovery, agentSearch, merchantRouter, ai }) {
     this.services = services;
     this.discovery = discovery;
+    // Phase 2: global keyword search now goes through AgentSearchService
+    // (Customer -> AI Concierge -> AgentSearchService -> DiscoveryEngine).
+    // `discovery` is still used directly for name-based lookups, which
+    // aren't part of AgentSearchService's minimal tool-call surface.
+    this.agentSearch = agentSearch;
     this.merchantRouter = merchantRouter;
     this.ai = ai;
   }
@@ -83,7 +88,7 @@ export class PlatformRouter {
       // Look up by name across ALL statuses first, so an existing-but-
       // unavailable merchant gets an honest "not available" reply instead
       // of silently falling through to a generic keyword search.
-      const anyStatusMatches = this.discovery.repos.merchants.findByNameFragment(concierge.merchantNameHint);
+      const anyStatusMatches = this.discovery.searchByMerchantNameAnyStatus(concierge.merchantNameHint);
       const discoverableMatches = anyStatusMatches.filter((m) => this.merchantRouter.isRoutable(m));
 
       if (discoverableMatches.length === 1) {
@@ -123,7 +128,7 @@ export class PlatformRouter {
   }
 
   async _runSearch(customer, session, keywords) {
-    const { organic, sponsored } = await this.discovery.searchByKeywords(keywords);
+    const { organic, sponsored } = await this.agentSearch.searchMerchants(keywords);
     const updated = this.services.sessions.update(session.id, {
       lastSearchQuery: keywords,
       lastSearchResults: [...organic, ...sponsored].map((c) => ({ merchant_id: c.merchant.merchant_id, name: c.merchant.name })),

@@ -8,6 +8,7 @@ import { createConciergeAIProvider } from "./ai/index.js";
 import { MerchantRegistry, buildAtieuAdapterFactory, buildGenericAdapterFactory } from "./merchant/MerchantRegistry.js";
 import { MerchantRouter } from "./merchant/MerchantRouter.js";
 import { DiscoveryEngine } from "./discovery/DiscoveryEngine.js";
+import { AgentSearchService } from "./services/agentSearchService.js";
 import { PlatformRouter } from "./router/PlatformRouter.js";
 import { createPlatformApp } from "./api/app.js";
 
@@ -48,8 +49,9 @@ const registry = new MerchantRegistry({
 });
 
 const merchantRouter = new MerchantRouter(registry);
-const discovery = new DiscoveryEngine(repos, registry);
-const router = new PlatformRouter({ services, discovery, merchantRouter, ai });
+const discovery = new DiscoveryEngine(services.merchantData, registry);
+const agentSearch = new AgentSearchService({ discovery, registry });
+const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai });
 
 const app = createPlatformApp({ db: platformDb, repos, services, discovery, merchantRouter, registry, router });
 
