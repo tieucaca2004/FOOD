@@ -5,18 +5,21 @@ import { MenuImportService } from "./menuImportService.js";
 import { MenuImageStorage } from "./menuImageStorage.js";
 import { createMenuVisionProvider } from "../ai/menu/index.js";
 import { CartService } from "./cartService.js";
+import { OrderService } from "./orderService.js";
+import { NullMerchantDispatchPort } from "./merchantDispatch.js";
 import { SubscriptionService, NullBillingProvider } from "./subscriptionService.js";
 import { PlatformCustomerService } from "./platformCustomerService.js";
 import { PlatformSessionService } from "./platformSessionService.js";
 import { PaymentService } from "./paymentService.js";
 import { DeliveryService } from "./deliveryService.js";
 
-// `visionProvider`/`imageStorage` are injectable (tests pass a
-// deterministic fake vision provider and a temp-dir storage instead of
-// the real config-driven ones — see platform/test/helpers/testPlatform.js).
-export function createPlatformServices(repos, { visionProvider, imageStorage } = {}) {
+// `visionProvider`/`imageStorage`/`dispatchPort` are injectable (tests
+// pass deterministic fakes instead of the real config-driven ones — see
+// platform/test/helpers/testPlatform.js).
+export function createPlatformServices(repos, { visionProvider, imageStorage, dispatchPort } = {}) {
   const merchantData = new MerchantDataService(repos); // read-side: the canonical merchant-record lookup (Phase 1)
   const menu = new MenuService(repos); // Generic Menu Engine (Phase 3) — generic merchants only, A Tiểu has its own
+  const cart = new CartService(repos, menu, merchantData); // Generic Cart Engine (Phase 5) — generic merchants only, A Tiểu has its own
 
   return {
     merchants: new MerchantService(repos), // write-side: onboarding/lifecycle actions
@@ -28,11 +31,15 @@ export function createPlatformServices(repos, { visionProvider, imageStorage } =
       visionProvider: visionProvider || createMenuVisionProvider(),
       imageStorage: imageStorage || new MenuImageStorage(),
     }),
-    cart: new CartService(repos, menu, merchantData), // Generic Cart Engine (Phase 5) — generic merchants only, A Tiểu has its own
+    cart,
+    // Generic Order + Dispatch Engine (Phase 6) — generic merchants only,
+    // A Tiểu has its own order engine. No payment/delivery dependency —
+    // see orderService.js class doc for the business-model boundary.
+    orders: new OrderService(repos, cart, menu, merchantData, dispatchPort || new NullMerchantDispatchPort()),
     subscriptions: new SubscriptionService(repos, new NullBillingProvider()),
     customers: new PlatformCustomerService(repos),
     sessions: new PlatformSessionService(repos),
-    payments: new PaymentService(repos),
-    deliveries: new DeliveryService(repos),
+    payments: new PaymentService(repos), // unused/future scaffolding (Phase 6 does not call this)
+    deliveries: new DeliveryService(repos), // unused/future scaffolding (Phase 6 does not call this)
   };
 }

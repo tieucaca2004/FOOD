@@ -28,6 +28,11 @@ export const platformConfig = {
   cartMaxItemQuantity: Number(process.env.CART_MAX_ITEM_QUANTITY || 50), // per line item
   cartMaxItems: Number(process.env.CART_MAX_ITEMS || 200), // distinct products per cart — resource abuse guard (security gate §50)
 
+  // Generic Order + Dispatch Engine (Phase 6). Separate from A Tiểu's own
+  // src/config.js orderCodePrefix ("AT") — platform order codes must not
+  // be tagged with A Tiểu's prefix for merchants that aren't A Tiểu.
+  orderCodePrefix: process.env.PLATFORM_ORDER_CODE_PREFIX || "TD",
+
   dbPath: process.env.PLATFORM_SQLITE_PATH || "./data/platform.db",
 
   // Never hard-code trial length — configurable, applied when a plan row

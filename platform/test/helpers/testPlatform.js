@@ -80,6 +80,7 @@ export function buildTestPlatform({
   withAtieu = true,
   withGenericFixture = false,
   genericFixtureMerchants = [],
+  dispatchPort,
 } = {}) {
   const db = createPlatformConnection(":memory:");
   runPlatformMigrations(db);
@@ -96,7 +97,7 @@ export function buildTestPlatform({
   // upload dir (never the real data/uploads/menu-imports) — spec §29/§30.
   const visionProvider = new FakeMenuVisionProvider();
   const imageStorage = new MenuImageStorage(path.join(os.tmpdir(), `menu-import-test-${randomUUID()}`));
-  const services = createPlatformServices(repos, { visionProvider, imageStorage });
+  const services = createPlatformServices(repos, { visionProvider, imageStorage, dispatchPort });
   const ai = new NullProvider();
 
   const moduleFactories = {};
