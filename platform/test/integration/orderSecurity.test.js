@@ -1,12 +1,15 @@
-// Phase 6 security test matrix — mandatory categories per the approved
-// implementation scope (§G): order IDOR, cross-customer/cross-merchant
-// isolation, malformed IDs, forged merchant_id/customer_id, price/
-// subtotal/total tampering, quantity abuse, SQL injection, mass
-// assignment, duplicate confirmation, transaction rollback, invalid
-// state transitions, error leakage, secret leakage, PRICE_CHANGED,
-// inactive/expired merchant, unavailable/deleted product, hidden menu.
-// Concurrent double confirmation and the primary transaction-rollback
-// proof already live in orderService.test.js (tests 28/28b/29) — not
+// Phase 6 / 6.x security test matrix — mandatory categories per the
+// approved implementation scope (§G) plus Phase 6.x's cart-lifecycle
+// additions (§6): order IDOR, cross-customer/cross-merchant isolation,
+// malformed IDs, forged merchant_id/customer_id, price/subtotal/total
+// tampering, quantity abuse, SQL injection, mass assignment, duplicate
+// confirmation, transaction rollback, invalid state transitions, error
+// leakage, secret leakage, PRICE_CHANGED, inactive/expired merchant,
+// unavailable/deleted product, hidden menu, cart-retirement abuse
+// (cross-customer retire/reuse), and cart lifecycle state-transition
+// abuse (ACTIVE -> CONVERTED -> ACTIVE must be impossible). Concurrent
+// double confirmation and the primary transaction-rollback proofs
+// already live in orderService.test.js (tests 28/28b/29/29b) — not
 // duplicated here; this file focuses on adversarial-input angles.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -88,6 +91,90 @@ test("an order created for one merchant always reports that merchant_id, regardl
   assert.equal(order.merchant_id, "MERCHANT002");
   const reloaded = platform.services.orders.getOrder(customer.id, order.id);
   assert.equal(reloaded.merchant_id, "MERCHANT002");
+});
+
+// --- Phase 6.x: cart lifecycle abuse ----------------------------------
+
+test("customer A cannot retire/convert customer B's cart by calling confirmOrder with B's cart_id — B's cart stays ACTIVE", async () => {
+  const platform = twoMerchants();
+  const victim = makeCustomer(platform, "victim");
+  const attacker = makeCustomer(platform, "attacker");
+  const { cart } = cartWithItem(platform, victim);
+
+  await assert.rejects(() => platform.services.orders.confirmOrder(attacker.id, cart.id), (err) => {
+    assert.equal(err.code, "CART_NOT_OWNED");
+    return true;
+  });
+
+  // The victim's cart was never touched by the attacker's attempt.
+  const raw = platform.db.prepare("SELECT status FROM merchant_carts WHERE id = ?").get(cart.id);
+  assert.equal(raw.status, "ACTIVE");
+  const stillUsable = platform.services.cart.getCart(victim.id, cart.id);
+  assert.equal(stillUsable.items.length, 1);
+  assert.equal(platform.services.orders.listOrders(victim.id).length, 0);
+});
+
+test("customer A cannot reuse/confirm customer B's cart as their own order", async () => {
+  const platform = twoMerchants();
+  const victim = makeCustomer(platform, "victim");
+  const attacker = makeCustomer(platform, "attacker");
+  const { cart } = cartWithItem(platform, victim);
+
+  await assert.rejects(() => platform.services.orders.confirmOrder(attacker.id, cart.id), (err) => {
+    assert.equal(err.code, "CART_NOT_OWNED");
+    return true;
+  });
+
+  assert.equal(platform.services.orders.listOrders(attacker.id).length, 0);
+});
+
+test("a converted cart can never be reopened to ACTIVE — ACTIVE -> CONVERTED -> ACTIVE is impossible through any public API", async () => {
+  const platform = twoMerchants();
+  const customer = makeCustomer(platform);
+  const { cart } = cartWithItem(platform, customer);
+  const order = await platform.services.orders.confirmOrder(customer.id, cart.id);
+
+  // No CartService method reactivates a cart at all (none exists) — the
+  // only observable states through the public API are: converted carts
+  // reject every CartService call, and the very next createCart() call
+  // for the same (customer, merchant) opens a DIFFERENT, brand-new cart
+  // rather than ever reviving this one.
+  for (const attempt of [
+    () => platform.services.cart.getCart(customer.id, cart.id),
+    () => platform.services.cart.addItem(customer.id, cart.id, "MERCHANT002", m2Product(platform).id, 1),
+    () => platform.services.cart.clearCart(customer.id, cart.id),
+  ]) {
+    assert.throws(attempt, (err) => {
+      assert.equal(err.code, "CART_INACTIVE");
+      return true;
+    });
+  }
+
+  const raw = platform.db.prepare("SELECT status FROM merchant_carts WHERE id = ?").get(cart.id);
+  assert.equal(raw.status, "CONVERTED"); // never reverted to ACTIVE by any of the attempts above
+
+  const reopened = platform.services.cart.createCart(customer.id, "MERCHANT002");
+  assert.notEqual(reopened.id, cart.id); // a genuinely new cart, not the old one reactivated
+  assert.equal(reopened.status, "ACTIVE");
+
+  // cancelling the order doesn't reopen the cart either.
+  platform.services.orders.cancelOrder(customer.id, order.id);
+  const rawAfterCancel = platform.db.prepare("SELECT status FROM merchant_carts WHERE id = ?").get(cart.id);
+  assert.equal(rawAfterCancel.status, "CONVERTED");
+});
+
+test("cross-merchant: a cart converted for MERCHANT002 cannot be confirmed again under a MERCHANT003 context via any forged argument", async () => {
+  const platform = twoMerchants();
+  const customer = makeCustomer(platform);
+  const { cart } = cartWithItem(platform, customer);
+  await platform.services.orders.confirmOrder(customer.id, cart.id);
+
+  // confirmOrder has no merchantId parameter to forge in the first place —
+  // re-confirming the same (now-converted) cart_id fails regardless.
+  await assert.rejects(() => platform.services.orders.confirmOrder(customer.id, cart.id), (err) => {
+    assert.equal(err.code, "CART_INACTIVE");
+    return true;
+  });
 });
 
 // --- Malformed IDs ----------------------------------------------------

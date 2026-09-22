@@ -1,4 +1,5 @@
 import { generateOrderCode } from "../domain/orderCode.js";
+import { CART_LIFECYCLE_STATUS } from "../domain/cartLifecycle.js";
 import { platformConfig } from "../config.js";
 
 // Orders for "generic" (data-driven) merchants — merchants with a custom
@@ -26,19 +27,23 @@ export class PlatformOrderRepository {
     return this.db.prepare(`SELECT * FROM orders WHERE customer_id = ? ORDER BY id DESC`).all(customerId);
   }
 
-  // Snapshots cart items into a new CREATED order inside one transaction —
-  // subtotal/total are computed here, never trusted from a caller (Phase
-  // 6 approved decision F). The per-day order-code sequence is counted
+  // Snapshots cart items into a new CREATED order AND retires the cart
+  // (Phase 6.x — see platform/domain/cartLifecycle.js) inside ONE
+  // transaction — order creation and cart retirement are atomic: a
+  // rollback here leaves no order and the cart still ACTIVE; a commit
+  // leaves the order created and the cart no longer ACTIVE. subtotal/
+  // total are computed here, never trusted from a caller (Phase 6
+  // approved decision F). The per-day order-code sequence is counted
   // inside the same transaction, same concurrency-safe technique A
   // Tiểu's own OrderRepository.createDraftFromCart already uses.
   //
   // cart_id has a DB-level partial UNIQUE index (orders(cart_id) WHERE
   // status != 'CANCELLED', migration 007) — the DB is the final
   // concurrency authority for "at most one active order per cart"
-  // (approved decision #2). If that constraint is violated (a second
-  // concurrent confirm on the same cart), this returns null rather than
-  // throwing a raw driver error — the caller (OrderService) maps that to
-  // a clean domain error.
+  // (approved decision #2, unchanged by Phase 6.x — see class doc). If
+  // that constraint is violated (a second concurrent confirm on the same
+  // cart), this returns null rather than throwing a raw driver error —
+  // the caller (OrderService) maps that to a clean domain error.
   createDraft({ merchantId, customerId, cartId, items }) {
     const tx = this.db.transaction(() => {
       const today = new Date();
@@ -65,6 +70,23 @@ export class PlatformOrderRepository {
       for (const item of items) {
         insertItem.run(orderId, item.product_id, item.product_name, item.unit_price, item.quantity, item.unit_price * item.quantity);
       }
+
+      // Retire the cart in the same transaction as the order it just
+      // became — this is what makes "one cart converts to at most one
+      // order" (the UNIQUE index above) compatible with "a customer can
+      // order from the same merchant again" (a brand-new ACTIVE cart).
+      // `AND status = 'ACTIVE'` is defense-in-depth, not load-bearing —
+      // the orders UNIQUE index above is what actually prevents a double
+      // conversion; this just avoids writing a redundant UPDATE if it
+      // somehow weren't still ACTIVE. The item rows on a converted cart
+      // are left as-is (not cleared) — a converted cart is a retired
+      // historical record, not a resource to keep tidy for reuse; it is
+      // never reachable through CartService again either way (frozen
+      // CartService._ownedCart rejects any status other than ACTIVE).
+      this.db
+        .prepare(`UPDATE merchant_carts SET status = ?, updated_at = datetime('now') WHERE id = ? AND status = 'ACTIVE'`)
+        .run(CART_LIFECYCLE_STATUS.CONVERTED, cartId);
+
       return this.getById(orderId);
     });
 

@@ -59,16 +59,19 @@ test("3. when the dispatch port reports delivered:true, the order advances to SE
   assert.equal(dispatchPort.calls.length, 1);
 });
 
-test("4. confirming clears the cart's items (cart itself stays ACTIVE, per approved decision #6 reuse of clearCart)", async () => {
+test("4. confirming retires the cart (CONVERTED) — it can no longer be read or mutated through CartService (Phase 6.x)", async () => {
   const platform = twoMerchants();
   const customer = makeCustomer(platform);
   const { cart } = cartWithItem(platform, customer);
 
   await platform.services.orders.confirmOrder(customer.id, cart.id);
 
-  const reloaded = platform.services.cart.getCart(customer.id, cart.id);
-  assert.equal(reloaded.status, "ACTIVE");
-  assert.equal(reloaded.items.length, 0);
+  assert.throws(() => platform.services.cart.getCart(customer.id, cart.id), (err) => {
+    assert.equal(err.code, "CART_INACTIVE");
+    return true;
+  });
+  const raw = platform.db.prepare("SELECT status FROM merchant_carts WHERE id = ?").get(cart.id);
+  assert.equal(raw.status, "CONVERTED");
 });
 
 // --- B. Checkout validation ---------------------------------------------
@@ -361,25 +364,96 @@ test("26. markDispatched(delivered:true) is idempotent when the order is already
   assert.equal(second.status, "SENT_TO_MERCHANT"); // no error, no change
 });
 
-// --- Documented Phase 6 limitation: one cart converts to at most one --
-// non-CANCELLED order, ever (approved decision #2's DB-level guard,
-// verified here against the frozen Phase 5 Cart Engine's own contract —
-// carts are never deleted/retired, so this is a real, known Phase 6
-// limitation, not a test oversight; see Phase 6 final report "Risks").
+// --- Phase 6.x: re-order — the most important test of this fix. A cart
+// converts to AT MOST ONE order (UNIQUE(cart_id) still holds), but a
+// customer CAN order again from the same merchant: confirming retires
+// cart #1 and CartService.createCart transparently opens a brand-new
+// cart #2 for the same (customer, merchant) pair (frozen, unmodified —
+// see platform/domain/cartLifecycle.js for why this needs no Phase 5
+// change at all).
 
-test("27. re-confirming the same cart after a successful order — even with new items added — is rejected with ORDER_ALREADY_EXISTS_FOR_CART (documented limitation)", async () => {
+test("27. re-order: after order #1, the customer can create a NEW cart for the same merchant, add products, and confirm order #2 — independently, with a different cart_id, UNIQUE(cart_id) still holding for both", async () => {
+  const platform = twoMerchants();
+  const customer = makeCustomer(platform);
+
+  // 1-4: cart #1, add product, confirm -> order #1.
+  const { cart: cart1 } = cartWithItem(platform, customer, 2);
+  const order1 = await platform.services.orders.confirmOrder(customer.id, cart1.id);
+  assert.equal(order1.cart_id, cart1.id);
+
+  // 5: cart #1 is no longer ACTIVE (already proven in test 4; re-asserted
+  // here as the precondition for what follows).
+  assert.throws(() => platform.services.cart.getCart(customer.id, cart1.id), (err) => {
+    assert.equal(err.code, "CART_INACTIVE");
+    return true;
+  });
+
+  // 6-9: a NEW cart for the SAME customer + merchant, add product, confirm -> order #2.
+  const cart2 = platform.services.cart.createCart(customer.id, "MERCHANT002");
+  assert.notEqual(cart2.id, cart1.id, "cart_id #1 !== cart_id #2");
+  platform.services.cart.addItem(customer.id, cart2.id, "MERCHANT002", m2Product(platform).id, 3);
+  const order2 = await platform.services.orders.confirmOrder(customer.id, cart2.id);
+  assert.equal(order2.cart_id, cart2.id);
+
+  // 10-11: order #1 and #2 are independent, distinct records.
+  assert.notEqual(order1.id, order2.id);
+  const reloaded1 = platform.services.orders.getOrder(customer.id, order1.id);
+  const reloaded2 = platform.services.orders.getOrder(customer.id, order2.id);
+  assert.equal(reloaded1.cart_id, cart1.id);
+  assert.equal(reloaded2.cart_id, cart2.id);
+  assert.equal(reloaded1.items[0].quantity, 2);
+  assert.equal(reloaded2.items[0].quantity, 3);
+
+  // 12: UNIQUE(cart_id) still holds — neither cart can produce a second order.
+  const rawOrderCounts = platform.db
+    .prepare("SELECT cart_id, COUNT(*) AS n FROM orders WHERE cart_id IN (?, ?) GROUP BY cart_id")
+    .all(cart1.id, cart2.id);
+  for (const row of rawOrderCounts) assert.equal(row.n, 1);
+
+  const list = platform.services.orders.listOrders(customer.id);
+  assert.equal(list.length, 2);
+});
+
+test("27b. cancelling order #1 does not reactivate cart #1 — CANNOT reopen a converted cart; a new cart is still required for re-order", async () => {
+  const platform = twoMerchants();
+  const customer = makeCustomer(platform);
+  const { cart: cart1 } = cartWithItem(platform, customer);
+  const order1 = await platform.services.orders.confirmOrder(customer.id, cart1.id);
+  platform.services.orders.cancelOrder(customer.id, order1.id);
+
+  assert.throws(() => platform.services.cart.getCart(customer.id, cart1.id), (err) => {
+    assert.equal(err.code, "CART_INACTIVE"); // still CONVERTED, not reopened to ACTIVE
+    return true;
+  });
+  const raw = platform.db.prepare("SELECT status FROM merchant_carts WHERE id = ?").get(cart1.id);
+  assert.equal(raw.status, "CONVERTED");
+
+  // Re-order still works via a brand-new cart, exactly as if the order
+  // hadn't been cancelled — cancellation doesn't unlock cart #1 either way.
+  const cart2 = platform.services.cart.createCart(customer.id, "MERCHANT002");
+  assert.notEqual(cart2.id, cart1.id);
+});
+
+// --- Phase 6.x §5: idempotency — re-confirming the SAME cart never ----
+// creates a second order, without breaking UNIQUE(cart_id).
+
+test("27c. idempotency: confirming cart #1 a second time (no new items, same cart_id) never creates order #2 — clean domain error, UNIQUE(cart_id) intact", async () => {
   const platform = twoMerchants();
   const customer = makeCustomer(platform);
   const { cart } = cartWithItem(platform, customer);
-  await platform.services.orders.confirmOrder(customer.id, cart.id);
 
-  // Same (customer, merchant) => same ACTIVE cart row (Phase 5 contract) —
-  // add a fresh item and try to confirm again.
-  platform.services.cart.addItem(customer.id, cart.id, "MERCHANT002", m2Product(platform).id, 1);
+  const order1 = await platform.services.orders.confirmOrder(customer.id, cart.id);
+
   await assert.rejects(() => platform.services.orders.confirmOrder(customer.id, cart.id), (err) => {
-    assert.equal(err.code, "ORDER_ALREADY_EXISTS_FOR_CART");
+    assert.equal(err.code, "CART_INACTIVE"); // the cart itself is already retired — a clean, stable domain error, not a raw driver error
     return true;
   });
+
+  const list = platform.services.orders.listOrders(customer.id);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].id, order1.id);
+  const rawCount = platform.db.prepare("SELECT COUNT(*) AS n FROM orders WHERE cart_id = ?").get(cart.id).n;
+  assert.equal(rawCount, 1); // UNIQUE(cart_id) among non-CANCELLED orders — never violated, never needed to be
 });
 
 // --- O. Concurrency / double confirmation ----------------------------------
@@ -414,11 +488,11 @@ test("28. two order-creation attempts for the same cart race at the DB level —
 test("28b. calling confirmOrder twice back-to-back on the same cart (the literal double-click pattern) never produces two orders or corrupts state", async () => {
   // Documents the actual observed behavior for this exact call pattern:
   // since confirmOrder has no `await` before its DB transaction commits
-  // and clearCart runs, the first call always finishes (order created,
-  // cart cleared) before the second one starts — so the second call
-  // observes CART_EMPTY, not a duplicate order. Either way, the
-  // invariant that matters holds: never more than one non-CANCELLED
-  // order for this cart.
+  // and cart retirement is now atomic with that same commit (Phase
+  // 6.x), the first call always finishes (order created, cart CONVERTED)
+  // before the second one starts — so the second call observes
+  // CART_INACTIVE, not a duplicate order. Either way, the invariant that
+  // matters holds: never more than one non-CANCELLED order for this cart.
   const platform = twoMerchants();
   const customer = makeCustomer(platform);
   const { cart } = cartWithItem(platform, customer);
@@ -432,7 +506,7 @@ test("28b. calling confirmOrder twice back-to-back on the same cart (the literal
   const rejected = results.filter((r) => r.status === "rejected");
   assert.equal(fulfilled.length, 1, "exactly one confirm succeeds");
   assert.equal(rejected.length, 1, "the other fails cleanly, never a raw error");
-  assert.equal(rejected[0].reason.code, "CART_EMPTY");
+  assert.equal(rejected[0].reason.code, "CART_INACTIVE");
 
   const orders = platform.services.orders.listOrders(customer.id);
   assert.equal(orders.length, 1);
@@ -479,7 +553,48 @@ test("29. a failure between order-header insertion and order_items completion le
   assert.equal(rawOrders.length, 0);
   const rawItems = rawDb.prepare(`SELECT * FROM order_items`).all();
   assert.equal(rawItems.length, 0);
-  // Cart was never cleared either — clearCart only runs after a successful commit.
+  // Cart retirement is inside the same transaction (Phase 6.x) — a
+  // rollback here must leave the cart still ACTIVE and untouched too.
   const stillThere = platform.services.cart.getCart(customer.id, cart.id);
   assert.equal(stillThere.items.length, 2);
+});
+
+test("29b. a failure in the cart-retirement statement itself (last step before commit) rolls back the whole order too — Phase 6.x's core atomicity guarantee", async () => {
+  const platform = twoMerchants();
+  const customer = makeCustomer(platform);
+  const { cart } = cartWithItem(platform, customer, 4);
+
+  const orderRepo = platform.services.orders.repos.orders;
+  const rawDb = orderRepo.db;
+  const originalPrepare = rawDb.prepare.bind(rawDb);
+  rawDb.prepare = (sql) => {
+    const stmt = originalPrepare(sql);
+    if (sql.includes("UPDATE merchant_carts SET status")) {
+      const originalRun = stmt.run.bind(stmt);
+      stmt.run = (...args) => {
+        throw new Error("simulated failure in cart-retirement statement");
+      };
+    }
+    return stmt;
+  };
+
+  try {
+    await assert.rejects(() => platform.services.orders.confirmOrder(customer.id, cart.id), /simulated failure/);
+  } finally {
+    rawDb.prepare = originalPrepare;
+  }
+
+  // No order at all — the order header/items insert that already ran
+  // inside this same transaction must have rolled back too.
+  assert.equal(platform.services.orders.listOrders(customer.id).length, 0);
+  const rawOrders = rawDb.prepare(`SELECT * FROM orders WHERE customer_id = ?`).all(customer.id);
+  assert.equal(rawOrders.length, 0);
+
+  // Cart is still ACTIVE with its original items — never retired, since
+  // the transaction that would have retired it never committed.
+  const stillActive = platform.services.cart.getCart(customer.id, cart.id);
+  assert.equal(stillActive.items.length, 1);
+  assert.equal(stillActive.items[0].quantity, 4);
+  const raw = rawDb.prepare("SELECT status FROM merchant_carts WHERE id = ?").get(cart.id);
+  assert.equal(raw.status, "ACTIVE");
 });

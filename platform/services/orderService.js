@@ -40,10 +40,26 @@ import { isAccountDiscoverable } from "../domain/merchantStatus.js";
  * same cart race to PlatformOrderRepository.createDraft's INSERT, and
  * only one can win; the loser gets a clean ORDER_ALREADY_EXISTS_FOR_CART.
  *
- * POST-COMMIT FAILURE (approved decision #3): once the order transaction
- * commits, it is never rolled back for a later step (clearCart, dispatch)
- * failing — that step's failure is surfaced as a clean error/result, and
- * the DB uniqueness guard above prevents a duplicate order from a retry.
+ * CART LIFECYCLE (Phase 6.x): confirming a cart RETIRES it — atomically,
+ * in the same DB transaction as the order it becomes (see
+ * PlatformOrderRepository.createDraft and platform/domain/
+ * cartLifecycle.js). A retired (CONVERTED) cart can never be reused or
+ * reopened — CartService's own frozen ownership guard already rejects
+ * any further read/mutation on it (CART_INACTIVE) — the customer gets a
+ * brand-new ACTIVE cart for their next order with the same merchant
+ * (CartService.createCart already does this correctly, unmodified: a
+ * CONVERTED cart is invisible to its `WHERE status = 'ACTIVE'` lookup).
+ * So UNIQUE(cart_id) means exactly "one cart converts to at most one
+ * order" — not "one order ever per customer+merchant".
+ *
+ * POST-COMMIT FAILURE (approved decision #3, narrowed by Phase 6.x): the
+ * only step left after the order transaction commits is dispatch — cart
+ * retirement is no longer a separate post-commit step (it is now inside
+ * the same transaction as order creation), so the previously-documented
+ * "cart might not get cleared after a committed order" gap no longer
+ * exists. If dispatch fails, the order is never rolled back for it —
+ * that failure surfaces as a clean result, and the DB uniqueness guard
+ * above still prevents a duplicate order from any retry.
  */
 export class OrderError extends Error {
   constructor(code, message, status = 400) {
@@ -129,6 +145,12 @@ export class OrderService {
       });
     }
 
+    // Order creation AND cart retirement happen atomically inside this
+    // one call (Phase 6.x — see PlatformOrderRepository.createDraft): a
+    // rollback here leaves no order and the cart still ACTIVE; a commit
+    // leaves the order created and the cart already CONVERTED. There is
+    // no separate clearCart step and no window where the order exists
+    // but the cart is still usable.
     const order = this.repos.orders.createDraft({
       merchantId: cart.merchant_id,
       customerId,
@@ -139,10 +161,9 @@ export class OrderService {
       throw new OrderError("ORDER_ALREADY_EXISTS_FOR_CART", `An order already exists for cart ${cartId}`, 409);
     }
 
-    // Post-commit steps — the order above is already valid and committed;
-    // neither step below can roll it back (approved decision #3).
-    this.cartService.clearCart(customerId, cartId);
-
+    // The only step left after the order transaction commits — its
+    // failure can never roll back the already-valid, already-committed
+    // order (approved decision #3).
     const dispatchResult = await this.dispatchPort.dispatch(order);
     const finalOrder = await this.markDispatched(order.id, dispatchResult);
 
