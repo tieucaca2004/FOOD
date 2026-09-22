@@ -3,6 +3,7 @@ import { MerchantSubscriptionRepository } from "./merchantSubscriptionRepository
 import { MerchantProductRepository } from "./merchantProductRepository.js";
 import { MerchantCategoryRepository } from "./merchantCategoryRepository.js";
 import { MerchantMenuRepository } from "./merchantMenuRepository.js";
+import { MenuImportRepository } from "./menuImportRepository.js";
 import { PlatformCustomerRepository } from "./platformCustomerRepository.js";
 import { PlatformSessionRepository } from "./platformSessionRepository.js";
 import { PlatformMessageRepository } from "./platformMessageRepository.js";
@@ -20,6 +21,7 @@ export function createPlatformRepositories(db) {
     merchantProducts: new MerchantProductRepository(db),
     merchantCategories: new MerchantCategoryRepository(db),
     merchantMenus: new MerchantMenuRepository(db),
+    menuImports: new MenuImportRepository(db),
     customers: new PlatformCustomerRepository(db),
     sessions: new PlatformSessionRepository(db),
     messages: new PlatformMessageRepository(db),

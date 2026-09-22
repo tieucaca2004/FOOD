@@ -17,6 +17,13 @@ export const platformConfig = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
 
+  // Menu Import vision/OCR (Phase 4) — separate toggle from the concierge
+  // AI above; tests never depend on either being configured.
+  menuVisionProvider: process.env.MENU_VISION_PROVIDER || "null", // "null" | "anthropic"
+  menuVisionModel: process.env.MENU_VISION_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
+  menuImportMaxImageBytes: Number(process.env.MENU_IMPORT_MAX_IMAGE_BYTES || 8 * 1024 * 1024),
+  menuImportUploadDir: process.env.MENU_IMPORT_UPLOAD_DIR || "./data/uploads/menu-imports",
+
   dbPath: process.env.PLATFORM_SQLITE_PATH || "./data/platform.db",
 
   // Never hard-code trial length — configurable, applied when a plan row

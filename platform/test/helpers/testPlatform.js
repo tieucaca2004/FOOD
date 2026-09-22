@@ -1,7 +1,12 @@
+import os from "node:os";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { createPlatformConnection, runPlatformMigrations } from "../../db/connection.js";
 import { createPlatformRepositories } from "../../repositories/index.js";
 import { createPlatformServices } from "../../services/index.js";
 import { NullProvider } from "../../../src/ai/NullProvider.js";
+import { FakeMenuVisionProvider } from "./fakeMenuVisionProvider.js";
+import { MenuImageStorage } from "../../services/menuImageStorage.js";
 import { MerchantRegistry, buildAtieuAdapterFactory, buildGenericAdapterFactory } from "../../merchant/MerchantRegistry.js";
 import { MerchantRouter } from "../../merchant/MerchantRouter.js";
 import { DiscoveryEngine } from "../../discovery/DiscoveryEngine.js";
@@ -87,7 +92,11 @@ export function buildTestPlatform({
   );
 
   const repos = createPlatformRepositories(db);
-  const services = createPlatformServices(repos);
+  // Deterministic, internet-free vision provider + a per-test-run temp
+  // upload dir (never the real data/uploads/menu-imports) — spec §29/§30.
+  const visionProvider = new FakeMenuVisionProvider();
+  const imageStorage = new MenuImageStorage(path.join(os.tmpdir(), `menu-import-test-${randomUUID()}`));
+  const services = createPlatformServices(repos, { visionProvider, imageStorage });
   const ai = new NullProvider();
 
   const moduleFactories = {};
@@ -148,7 +157,7 @@ export function buildTestPlatform({
   const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai });
   const app = createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router });
 
-  return { db, repos, services, ai, registry, merchantRouter, discovery, agentSearch, router, app, atieuCtx };
+  return { db, repos, services, ai, visionProvider, imageStorage, registry, merchantRouter, discovery, agentSearch, router, app, atieuCtx };
 }
 
 export async function startServer(app) {

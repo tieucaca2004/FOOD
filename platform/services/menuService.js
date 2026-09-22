@@ -224,4 +224,72 @@ export class MenuService {
     this._ownedProduct(merchantId, productId);
     return this.repos.merchantProducts.setAvailability(productId, available);
   }
+
+  // ---------------------------------------------------------------------
+  // Menu Import (Phase 4) entry point — the ONLY way an approved import
+  // draft becomes real categories/products + a PUBLISHED menu. Called by
+  // MenuImportService.publishImport(); nothing else ever writes published
+  // menu tables from a draft. Wrapped in one DB transaction (spec §22) —
+  // either the whole draft applies and the menu publishes, or nothing
+  // changes at all.
+  // ---------------------------------------------------------------------
+  applyPublishedDraft(merchantId, draft) {
+    const db = this.repos.merchantMenus.db; // same connection every repo shares
+    const tx = db.transaction(() => {
+      const existingCategories = this.repos.merchantCategories.listByMerchant(merchantId);
+      const existingProducts = this.repos.merchantProducts.listByMerchant(merchantId, { includeUnavailable: true });
+      const usedSkus = new Set(existingProducts.map((p) => p.sku));
+
+      for (const draftCategory of draft.categories || []) {
+        let categoryRow = draftCategory.name
+          ? existingCategories.find((c) => c.name === draftCategory.name)
+          : null;
+        if (draftCategory.name && !categoryRow) {
+          categoryRow = this.createCategory(merchantId, draftCategory.name);
+          existingCategories.push(categoryRow);
+        }
+
+        for (const product of draftCategory.products || []) {
+          // Defensive re-check — approveImport() should already guarantee
+          // this, but publish never trusts a draft blindly.
+          if (product.needs_review || product.price == null) continue;
+
+          const sku = this._generateUniqueSku(product.name, usedSkus);
+          usedSkus.add(sku);
+          this.createProduct(merchantId, {
+            sku,
+            name: product.name,
+            categoryId: categoryRow ? categoryRow.id : null,
+            description: product.description ?? null,
+            price: product.price,
+            available: product.available !== false,
+            keywords: product.keywords || [],
+          });
+        }
+      }
+
+      this.publishMenu(merchantId);
+    });
+    tx();
+    return this.getMenu(merchantId);
+  }
+
+  _generateUniqueSku(name, usedSkus) {
+    const base =
+      (name || "item")
+        .toString()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/đ/gi, "d")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40) || "item";
+    let candidate = base;
+    let suffix = 1;
+    while (usedSkus.has(candidate)) {
+      candidate = `${base}-${suffix++}`;
+    }
+    return candidate;
+  }
 }
