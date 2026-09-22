@@ -1,5 +1,5 @@
 import { isSubscriptionExpired } from "../domain/subscription.js";
-import { MERCHANT_STATUS } from "../domain/merchantStatus.js";
+import { MERCHANT_STATUS, SUBSCRIPTION_STATUS } from "../domain/merchantStatus.js";
 
 // SubscriptionService / BillingProvider abstraction per spec §15. No real
 // payment gateway is integrated in V1 — expireIfNeeded() only ever flips
@@ -15,15 +15,31 @@ export class SubscriptionService {
   }
 
   // Called opportunistically (e.g. before Discovery reads merchant status)
-  // to flip an expired TRIAL into SUBSCRIPTION_REQUIRED and the merchant
-  // itself into EXPIRED — a business rule, not a guess.
+  // per spec §20: subscription_status -> EXPIRED, account_status -> EXPIRED,
+  // active -> false. merchants.setStatus() dual-writes account_status/active
+  // from the legacy EXPIRED value, so this one call satisfies both models.
   expireIfNeeded(merchantId) {
     const subscription = this.getActive(merchantId);
     if (!subscription) return null;
     if (!isSubscriptionExpired(subscription)) return subscription;
 
-    this.repos.subscriptions.setStatus(subscription.id, "SUBSCRIPTION_REQUIRED");
+    this.repos.subscriptions.setStatus(subscription.id, SUBSCRIPTION_STATUS.EXPIRED);
     this.repos.merchants.setStatus(merchantId, MERCHANT_STATUS.EXPIRED);
+    return this.repos.subscriptions.getActiveByMerchant(merchantId);
+  }
+
+  // Spec §43: on renewal, subscription_status -> ACTIVE, account_status ->
+  // ACTIVE, active -> true. Never called automatically — a real renewal
+  // requires a real billing confirmation (NullBillingProvider.charge()
+  // always throws), so this is only reachable from an admin action or a
+  // future real BillingProvider callback, never from AI/customer text.
+  renew(merchantId, expiresAt) {
+    const subscription = this.getActive(merchantId);
+    if (!subscription) throw new Error(`No subscription found for merchant ${merchantId}`);
+
+    this.repos.subscriptions.setStatus(subscription.id, SUBSCRIPTION_STATUS.ACTIVE);
+    this.repos.subscriptions.setExpiresAt(subscription.id, expiresAt);
+    this.repos.merchants.setStatus(merchantId, MERCHANT_STATUS.ACTIVE);
     return this.repos.subscriptions.getActiveByMerchant(merchantId);
   }
 }

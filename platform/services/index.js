@@ -1,4 +1,5 @@
 import { MerchantService } from "./merchantService.js";
+import { MerchantDataService } from "./merchantDataService.js";
 import { SubscriptionService, NullBillingProvider } from "./subscriptionService.js";
 import { PlatformCustomerService } from "./platformCustomerService.js";
 import { PlatformSessionService } from "./platformSessionService.js";
@@ -7,7 +8,8 @@ import { DeliveryService } from "./deliveryService.js";
 
 export function createPlatformServices(repos) {
   return {
-    merchants: new MerchantService(repos),
+    merchants: new MerchantService(repos), // write-side: onboarding/lifecycle actions
+    merchantData: new MerchantDataService(repos), // read-side: the canonical merchant-record lookup (Phase 1)
     subscriptions: new SubscriptionService(repos, new NullBillingProvider()),
     customers: new PlatformCustomerService(repos),
     sessions: new PlatformSessionService(repos),

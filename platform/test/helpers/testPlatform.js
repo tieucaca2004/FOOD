@@ -44,9 +44,17 @@ export function buildTestPlatform({ withAtieu = true, withGenericFixture = false
 
   if (withAtieu) {
     atieuCtx = buildAtieuTestContext();
-    db.prepare(
-      `INSERT INTO merchants (merchant_id, name, slug, module, status, address) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run("ATIEU001", "Hủ Tiếu Xào A Tiểu", "hu-tieu-xao-a-tieu", "atieu", "ACTIVE", "Nha Trang, Khánh Hòa");
+    // Goes through the repository (not raw SQL) so account_status/active
+    // (Phase 1's split model) stay in sync automatically — see
+    // MerchantRepository.create()/setStatus().
+    repos.merchants.create({
+      merchantId: "ATIEU001",
+      name: "Hủ Tiếu Xào A Tiểu",
+      slug: "hu-tieu-xao-a-tieu",
+      module: "atieu",
+      status: "ACTIVE",
+      address: "Nha Trang, Khánh Hòa",
+    });
     db.prepare(`INSERT INTO merchant_subscriptions (merchant_id, plan_id, status, started_at) VALUES ('ATIEU001','free','ACTIVE',datetime('now'))`).run();
     moduleFactories.atieu = buildAtieuAdapterFactory({ services: atieuCtx.services, router: atieuCtx.router });
   }
@@ -54,9 +62,14 @@ export function buildTestPlatform({ withAtieu = true, withGenericFixture = false
   if (withGenericFixture) {
     // TEST-ONLY fixture merchant — never seeded into the real platform DB
     // (platform/db/seed.js only ever registers the real A Tiểu merchant).
-    db.prepare(
-      `INSERT INTO merchants (merchant_id, name, slug, module, status, address) VALUES (?, ?, ?, ?, ?, ?)`
-    ).run("TESTFIXTURE001", "Quán Thử Nghiệm B", "quan-thu-nghiem-b", "generic", "ACTIVE", "Nha Trang, Khánh Hòa");
+    repos.merchants.create({
+      merchantId: "TESTFIXTURE001",
+      name: "Quán Thử Nghiệm B",
+      slug: "quan-thu-nghiem-b",
+      module: "generic",
+      status: "ACTIVE",
+      address: "Nha Trang, Khánh Hòa",
+    });
     db.prepare(`INSERT INTO merchant_subscriptions (merchant_id, plan_id, status, started_at) VALUES ('TESTFIXTURE001','free','ACTIVE',datetime('now'))`).run();
     const catId = repos.merchantCategories.create("TESTFIXTURE001", "Hủ Tiếu Xào").id;
     repos.merchantProducts.create("TESTFIXTURE001", {

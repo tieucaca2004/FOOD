@@ -29,4 +29,11 @@ export class MerchantSubscriptionRepository {
       .run(status, subscriptionId);
     return this.db.prepare(`SELECT * FROM merchant_subscriptions WHERE id = ?`).get(subscriptionId);
   }
+
+  setExpiresAt(subscriptionId, expiresAt) {
+    this.db
+      .prepare(`UPDATE merchant_subscriptions SET expires_at = ?, started_at = COALESCE(started_at, datetime('now')), updated_at = datetime('now') WHERE id = ?`)
+      .run(expiresAt, subscriptionId);
+    return this.db.prepare(`SELECT * FROM merchant_subscriptions WHERE id = ?`).get(subscriptionId);
+  }
 }

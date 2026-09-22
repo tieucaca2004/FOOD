@@ -1,4 +1,5 @@
 import { logger } from "../../src/logger.js";
+import { deriveAccountFieldsFromLegacyStatus } from "../domain/merchantStatus.js";
 
 // Idempotent, production-safe seed: registers ONLY the real, already-live
 // A Tiểu merchant. Never inserts placeholder/demo merchants into the real
@@ -14,13 +15,16 @@ export function runPlatformSeed(db) {
   `);
   upsertPlan.run({ plan_id: "free", name: "Free", price: 0, trial_days: null });
 
+  const { accountStatus, active } = deriveAccountFieldsFromLegacyStatus("ACTIVE");
   const upsertMerchant = db.prepare(`
-    INSERT INTO merchants (merchant_id, name, slug, module, status, description, address)
-    VALUES (@merchant_id, @name, @slug, @module, @status, @description, @address)
+    INSERT INTO merchants (merchant_id, name, slug, module, status, account_status, active, description, address)
+    VALUES (@merchant_id, @name, @slug, @module, @status, @account_status, @active, @description, @address)
     ON CONFLICT(merchant_id) DO UPDATE SET
       name = excluded.name,
       slug = excluded.slug,
       module = excluded.module,
+      account_status = excluded.account_status,
+      active = excluded.active,
       updated_at = datetime('now')
   `);
   upsertMerchant.run({
@@ -29,6 +33,8 @@ export function runPlatformSeed(db) {
     slug: "hu-tieu-xao-a-tieu",
     module: "atieu",
     status: "ACTIVE",
+    account_status: accountStatus,
+    active: active ? 1 : 0,
     description: "Hủ tiếu xào — quán ăn đã vận hành qua module đặt món riêng.",
     address: null, // real address still pending owner confirmation — see src/../data/seed/NEEDS_OWNER_INPUT.md
   });
