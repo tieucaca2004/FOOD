@@ -72,4 +72,8 @@ export class MerchantProductRepository {
       );
     return this.findById(productId);
   }
+
+  delete(id) {
+    this.db.prepare(`DELETE FROM merchant_products WHERE id = ?`).run(id);
+  }
 }

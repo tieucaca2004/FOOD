@@ -25,6 +25,11 @@ export class GenericMerchantAdapter extends MerchantModule {
   }
 
   async searchProducts(queryText) {
+    // A DRAFT/ARCHIVED menu never surfaces in discovery/search — this is
+    // the only place that check lives; DiscoveryEngine itself is
+    // unchanged and simply sees "no matches" for such a merchant.
+    if (!this.menuService.isMenuVisible(this._merchantId)) return [];
+
     const query = stripAccents(queryText || "");
     const products = this.menuService.listProducts(this._merchantId, { includeUnavailable: true });
 
