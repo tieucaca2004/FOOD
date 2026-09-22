@@ -1,15 +1,21 @@
 {
-  "name": "atieu-zalo-ordering-engine",
+  "name": "tong-dai-zalo-marketplace",
   "version": "1.0.0",
-  "description": "Zalo OA ordering engine for Hủ Tiếu Xào A Tiểu — webhook, intent engine, menu/cart/order domain services, order state machine, Zalo Send API, SQLite persistence.",
+  "description": "Tổng Đài — Zalo OA marketplace platform. platform/ is the marketplace layer (discovery, merchant registry/router, AI concierge); src/ is the A Tiểu merchant module it routes into, unchanged and independently runnable.",
   "type": "module",
-  "main": "src/server.js",
+  "main": "platform/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test test/unit/*.test.js test/integration/*.test.js test/e2e/*.test.js",
     "migrate": "node scripts/migrate.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "platform:start": "node platform/server.js",
+    "platform:dev": "node --watch platform/server.js",
+    "platform:migrate": "node platform/scripts/migrate.js",
+    "platform:seed": "node platform/scripts/seed.js",
+    "test": "node --test test/unit/*.test.js test/integration/*.test.js test/e2e/*.test.js",
+    "test:platform": "node --test platform/test/unit/*.test.js platform/test/integration/*.test.js platform/test/e2e/*.test.js",
+    "test:all": "npm test && npm run test:platform"
   },
   "engines": {
     "node": ">=18"

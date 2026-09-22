@@ -1,3 +1,10 @@
+> **Ghi chú (repo giờ có 2 tầng):** Từ khi thêm **Tổng Đài** — lớp marketplace
+> nhiều merchant phía trên module này — toàn bộ nội dung README này mô tả
+> **A Tiểu Merchant Module** (`src/`), vẫn chạy độc lập y như trước, không hề
+> sửa. Lớp platform mới (`platform/`) coi module này là merchant đầu tiên và
+> route vào nó không đổi 1 dòng code nào ở đây. Xem **`platform/README.md`**
+> cho kiến trúc marketplace/discovery/AI concierge.
+
 # Zalo OA Ordering Engine — Hủ Tiếu Xào A Tiểu
 
 Backend production cho luồng: khách tìm quán trên Zalo → quan tâm OA → mở chat
