@@ -24,6 +24,9 @@ export const platformConfig = {
   menuImportMaxImageBytes: Number(process.env.MENU_IMPORT_MAX_IMAGE_BYTES || 8 * 1024 * 1024),
   menuImportUploadDir: process.env.MENU_IMPORT_UPLOAD_DIR || "./data/uploads/menu-imports",
 
+  // Generic Cart Engine (Phase 5).
+  cartMaxItemQuantity: Number(process.env.CART_MAX_ITEM_QUANTITY || 50),
+
   dbPath: process.env.PLATFORM_SQLITE_PATH || "./data/platform.db",
 
   // Never hard-code trial length — configurable, applied when a plan row
