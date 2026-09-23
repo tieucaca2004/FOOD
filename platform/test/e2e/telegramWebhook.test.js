@@ -1,7 +1,7 @@
 // Phase 8.x-T SIMULATED integration/security test matrix (A-R per spec).
 // "SIMULATED" — every test POSTs locally-constructed, Telegram-shaped JSON
 // to the real Express app; none talk to a real Telegram Bot API (no
-// credentials exist in this environment — no TELEGRAM_BOT_TOKEN, and
+// credentials exist in this environment — no PLATFORM_TELEGRAM_BOT_TOKEN, and
 // api.telegram.org/core.telegram.org are both unreachable from this
 // session, confirmed via direct connection test — see Phase 8.x-T final
 // report). Never report any result from this file as a REAL TELEGRAM PASS.

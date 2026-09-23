@@ -19,7 +19,9 @@ export const platformConfig = {
   // establish the safe config pattern before the capability is built.
   // telegramWebhookSecret is used now: verified against the header
   // X-Telegram-Bot-Api-Secret-Token on every inbound webhook request.
-  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
+  // PLATFORM_-prefixed because A Tiểu (src/config.js), running in this same
+  // process, already owns TELEGRAM_BOT_TOKEN for its order-notification bot.
+  telegramBotToken: process.env.PLATFORM_TELEGRAM_BOT_TOKEN || "",
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "",
   telegramWebhookPath: process.env.TELEGRAM_WEBHOOK_PATH || "/api/platform/webhook/telegram",
 
