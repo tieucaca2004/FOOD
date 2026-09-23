@@ -14,6 +14,7 @@ import { PlatformWebhookEventRepository } from "./webhookEventRepository.js";
 import { PlatformOrderRepository } from "./orderRepository.js";
 import { PaymentRepository } from "./paymentRepository.js";
 import { DeliveryRepository } from "./deliveryRepository.js";
+import { MerchantUserRepository } from "./merchantUserRepository.js";
 
 export function createPlatformRepositories(db) {
   return {
@@ -33,5 +34,6 @@ export function createPlatformRepositories(db) {
     orders: new PlatformOrderRepository(db),
     payments: new PaymentRepository(db),
     deliveries: new DeliveryRepository(db),
+    merchantUsers: new MerchantUserRepository(db), // Phase 7: merchant authentication identity anchor
   };
 }

@@ -7,6 +7,8 @@ import { createMenuVisionProvider } from "../ai/menu/index.js";
 import { CartService } from "./cartService.js";
 import { OrderService } from "./orderService.js";
 import { NullMerchantDispatchPort } from "./merchantDispatch.js";
+import { MerchantAuthService } from "./merchantAuthService.js";
+import { MerchantOrderService } from "./merchantOrderService.js";
 import { SubscriptionService, NullBillingProvider } from "./subscriptionService.js";
 import { PlatformCustomerService } from "./platformCustomerService.js";
 import { PlatformSessionService } from "./platformSessionService.js";
@@ -41,5 +43,10 @@ export function createPlatformServices(repos, { visionProvider, imageStorage, di
     sessions: new PlatformSessionService(repos),
     payments: new PaymentService(repos), // unused/future scaffolding (Phase 6 does not call this)
     deliveries: new DeliveryService(repos), // unused/future scaffolding (Phase 6 does not call this)
+    // Merchant Order Visibility / Receive boundary (Phase 7) — merchant
+    // side of the same orders/order_items OrderService already owns.
+    // See merchantOrderService.js for why this needs no change there.
+    merchantAuth: new MerchantAuthService(repos),
+    merchantOrders: new MerchantOrderService(repos),
   };
 }

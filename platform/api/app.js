@@ -4,6 +4,8 @@ import { requestId } from "../../src/api/middleware/requestId.js"; // generic, r
 import { rateLimit } from "../../src/api/middleware/rateLimit.js"; // generic, read-only reuse (params overridden below)
 import { platformErrorHandler, platformNotFound } from "./middleware/errorHandler.js";
 import { merchantRoutes } from "./routes/merchantRoutes.js";
+import { merchantAuthRoutes } from "./routes/merchantAuthRoutes.js";
+import { merchantOrderRoutes } from "./routes/merchantOrderRoutes.js";
 import { searchRoutes } from "./routes/searchRoutes.js";
 import { healthRoutes } from "./routes/healthRoutes.js";
 import { createPlatformWebhookHandler } from "../channel/webhookController.js";
@@ -25,6 +27,8 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
 
   app.use("/api/platform", healthRoutes(db));
   app.use("/api/platform", merchantRoutes({ services, repos, registry }));
+  app.use("/api/platform", merchantAuthRoutes({ merchantAuthService: services.merchantAuth }));
+  app.use("/api/platform", merchantOrderRoutes({ merchantOrderService: services.merchantOrders, merchantAuthService: services.merchantAuth }));
   app.use("/api/platform", searchRoutes(discovery));
 
   app.post(platformConfig.webhookPath, createPlatformWebhookHandler({ repos, services, router }));
