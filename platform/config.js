@@ -13,6 +13,16 @@ export const platformConfig = {
   zaloSendTimeoutMs: Number(process.env.PLATFORM_ZALO_SEND_TIMEOUT_MS || 8000),
   enableZaloSignatureCheck: process.env.PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK === "true",
 
+  // Telegram (Phase 8.x-T) — secondary INBOUND-only channel. telegramBotToken
+  // is not read anywhere in this phase (no outbound send exists yet) —
+  // reserved for a future outbound phase, per the security requirement to
+  // establish the safe config pattern before the capability is built.
+  // telegramWebhookSecret is used now: verified against the header
+  // X-Telegram-Bot-Api-Secret-Token on every inbound webhook request.
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
+  telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "",
+  telegramWebhookPath: process.env.TELEGRAM_WEBHOOK_PATH || "/api/platform/webhook/telegram",
+
   aiProvider: process.env.PLATFORM_AI_PROVIDER || "null", // "null" | "anthropic"
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",

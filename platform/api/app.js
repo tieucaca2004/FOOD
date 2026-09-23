@@ -11,6 +11,8 @@ import { healthRoutes } from "./routes/healthRoutes.js";
 import { createPlatformWebhookHandler } from "../channel/webhookController.js";
 import { zaloWebhookSecurity } from "./middleware/zaloWebhookSecurity.js";
 import { sanitizeWebhookErrors } from "./middleware/sanitizeWebhookErrors.js";
+import { createTelegramWebhookHandler } from "../channel/telegramWebhookController.js";
+import { telegramWebhookSecurity } from "./middleware/telegramWebhookSecurity.js";
 
 export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router }) {
   const app = express();
@@ -34,6 +36,12 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
   app.use("/api/platform", searchRoutes(discovery));
 
   app.post(platformConfig.webhookPath, zaloWebhookSecurity, sanitizeWebhookErrors, createPlatformWebhookHandler({ repos, services, router }));
+  app.post(
+    platformConfig.telegramWebhookPath,
+    telegramWebhookSecurity,
+    sanitizeWebhookErrors,
+    createTelegramWebhookHandler({ repos, services, router })
+  );
 
   app.use(platformNotFound);
   app.use(platformErrorHandler);
