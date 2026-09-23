@@ -7,9 +7,11 @@
 // report). Never report any result from this file as a REAL TELEGRAM PASS.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildTestPlatform, startServer, baseUrl } from "../helpers/testPlatform.js";
 import { platformConfig } from "../../config.js";
 
@@ -536,5 +538,193 @@ test("R. the Zalo webhook route still works after adding the Telegram route (no 
     assert.equal(body.status, "processed");
   } finally {
     server.close();
+  }
+});
+
+// --- S. Idempotency-store failures (F-2) ------------------------------------
+// These run the real app in a CHILD process that, like platform/server.js,
+// has no unhandledRejection handler — so an error escaping the async
+// controller kills that process instead of being masked by the test runner.
+// The parent drives it over IPC: inject/recover a repository failure, read
+// DB state. Process survival is asserted directly (exit code still null, and
+// a fresh update is still served).
+
+const F2_SECRET = "test-f2-secret-value";
+const F2_DB_ERROR = "SQLITE_BUSY: database is locked";
+
+const F2_CHILD_SCRIPT = `
+const { buildTestPlatform, startServer } = await import(process.env.F2_HELPER_URL);
+const { platformConfig } = await import(process.env.F2_CONFIG_URL);
+platformConfig.telegramWebhookSecret = process.env.F2_SECRET;
+const platform = buildTestPlatform({ withAtieu: false });
+const repo = platform.repos.webhookEvents;
+const originals = {
+  reserve: repo.reserve.bind(repo),
+  getCachedResponse: repo.getCachedResponse.bind(repo),
+  saveResponse: repo.saveResponse.bind(repo),
+};
+const server = await startServer(platform.app);
+process.on("message", (msg) => {
+  if (msg.cmd === "fail") repo[msg.method] = () => { throw new Error(process.env.F2_DB_ERROR); };
+  if (msg.cmd === "recover") repo[msg.method] = originals[msg.method];
+  let state = null;
+  if (msg.cmd === "state") {
+    const customer = platform.repos.customers.findByZaloUserId("telegram:" + msg.userId);
+    const inbound = customer
+      ? platform.db.prepare("SELECT COUNT(*) AS n FROM platform_messages m JOIN platform_sessions s ON s.id = m.session_id WHERE s.customer_id = ? AND m.direction = 'in'").get(customer.id).n
+      : 0;
+    const row = platform.db.prepare("SELECT response_json FROM platform_webhook_events WHERE message_id = ?").get("telegram:" + msg.updateId);
+    state = { customerExists: Boolean(customer), inboundMessages: inbound, webhookRow: row ? (row.response_json === null ? "uncached" : "cached") : "absent" };
+  }
+  process.send({ id: msg.id, state });
+});
+process.send({ ready: true, port: server.address().port, path: platformConfig.telegramWebhookPath });
+`;
+
+async function startIsolatedTelegramServer() {
+  // Empty cwd: the child's dotenv/config must never read a developer's real .env.
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "telegram-f2-"));
+  const child = spawn(process.execPath, ["--input-type=module", "-e", F2_CHILD_SCRIPT], {
+    cwd,
+    stdio: ["ignore", "ignore", "pipe", "ipc"],
+    env: {
+      ...process.env,
+      F2_HELPER_URL: pathToFileURL(path.join(REPO_ROOT, "platform/test/helpers/testPlatform.js")).href,
+      F2_CONFIG_URL: pathToFileURL(path.join(REPO_ROOT, "platform/config.js")).href,
+      F2_SECRET,
+      F2_DB_ERROR,
+    },
+  });
+  let stderr = "";
+  child.stderr.on("data", (d) => (stderr += d));
+  const ready = await new Promise((resolve, reject) => {
+    child.once("message", resolve);
+    child.once("exit", (code) => reject(new Error(`F-2 child exited before ready (code ${code}): ${stderr}`)));
+  });
+
+  let nextId = 0;
+  const command = (msg) =>
+    new Promise((resolve) => {
+      const id = ++nextId;
+      const onMessage = (reply) => {
+        if (reply.id === id) {
+          child.off("message", onMessage);
+          resolve(reply.state);
+        }
+      };
+      child.on("message", onMessage);
+      child.send({ ...msg, id });
+    });
+
+  return {
+    fail: (method) => command({ cmd: "fail", method }),
+    recover: (method) => command({ cmd: "recover", method }),
+    state: (userId, updateId) => command({ cmd: "state", userId, updateId }),
+    isAlive: () => child.exitCode === null && child.signalCode === null,
+    diagnostics: () => stderr,
+    async post(body) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${ready.port}${ready.path}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": F2_SECRET },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(5000),
+        });
+        const text = await res.text();
+        return { status: res.status, text, body: JSON.parse(text) };
+      } catch (err) {
+        return { status: null, text: "", body: null, error: err.cause?.code || err.name };
+      }
+    },
+    async stop() {
+      if (child.exitCode === null && child.signalCode === null) {
+        const exited = new Promise((resolve) => child.once("exit", resolve));
+        child.kill();
+        await exited;
+      }
+      fs.rmSync(cwd, { recursive: true, force: true });
+    },
+  };
+}
+
+async function assertStillServing(srv, userId, updateId) {
+  assert.ok(srv.isAlive(), `server process died: ${srv.diagnostics()}`);
+  const res = await srv.post(telegramUpdate({ userId, text: "Xin chào", updateId, messageId: 1 }));
+  assert.equal(res.status, 200, `follow-up request failed (${res.error ?? res.status}): ${srv.diagnostics()}`);
+  assert.equal(res.body.status, "processed");
+}
+
+test("S. reserve() failure: sanitized 500, no processing, process survives, and redelivery processes normally once the DB recovers", async () => {
+  const srv = await startIsolatedTelegramServer();
+  try {
+    const update = telegramUpdate({ userId: 2101, text: "Xin chào", updateId: 5001, messageId: 1 });
+    await srv.fail("reserve");
+
+    const first = await srv.post(update);
+    assert.equal(first.status, 500, `expected 500, got ${first.error ?? first.status}: ${srv.diagnostics()}`);
+    assert.deepEqual(first.body, { status: "error", error: "internal_error" });
+    assert.ok(!first.text.includes("SQLITE"));
+    assert.ok(!first.text.includes("database is locked"));
+    assert.deepEqual(await srv.state(2101, 5001), { customerExists: false, inboundMessages: 0, webhookRow: "absent" });
+    assert.ok(srv.isAlive(), `server process died: ${srv.diagnostics()}`);
+
+    await srv.recover("reserve");
+    const redelivery = await srv.post(update);
+    assert.equal(redelivery.status, 200);
+    assert.equal(redelivery.body.status, "processed");
+    assert.deepEqual(await srv.state(2101, 5001), { customerExists: true, inboundMessages: 1, webhookRow: "cached" });
+
+    await assertStillServing(srv, 2102, 5002);
+  } finally {
+    await srv.stop();
+  }
+});
+
+test("S. getCachedResponse() failure on a duplicate: safe duplicate response, never reprocessed, process survives", async () => {
+  const srv = await startIsolatedTelegramServer();
+  try {
+    const update = telegramUpdate({ userId: 2201, text: "Xin chào", updateId: 6001, messageId: 1 });
+    const first = await srv.post(update);
+    assert.equal(first.body.status, "processed");
+    assert.deepEqual(await srv.state(2201, 6001), { customerExists: true, inboundMessages: 1, webhookRow: "cached" });
+
+    await srv.fail("getCachedResponse");
+    const duplicate = await srv.post(update);
+    assert.equal(duplicate.status, 200, `expected 200, got ${duplicate.error ?? duplicate.status}: ${srv.diagnostics()}`);
+    assert.equal(duplicate.body.status, "duplicate");
+    assert.ok(!duplicate.text.includes("SQLITE"));
+    assert.ok(!duplicate.text.includes("database is locked"));
+    assert.equal((await srv.state(2201, 6001)).inboundMessages, 1); // not processed a second time
+
+    await assertStillServing(srv, 2202, 6002);
+  } finally {
+    await srv.stop();
+  }
+});
+
+test("S. saveResponse() failure: the computed response is still returned, processing happens exactly once, process survives", async () => {
+  const srv = await startIsolatedTelegramServer();
+  try {
+    const update = telegramUpdate({ userId: 2301, text: "Xin chào", updateId: 7001, messageId: 1 });
+    await srv.fail("saveResponse");
+
+    const first = await srv.post(update);
+    assert.equal(first.status, 200, `expected 200, got ${first.error ?? first.status}: ${srv.diagnostics()}`);
+    assert.equal(first.body.status, "processed");
+    assert.equal(first.body.channel, "telegram");
+    assert.ok(first.body.reply_text);
+    assert.ok(!first.text.includes("SQLITE"));
+    assert.deepEqual(await srv.state(2301, 7001), { customerExists: true, inboundMessages: 1, webhookRow: "uncached" });
+
+    await srv.recover("saveResponse");
+    const redelivery = await srv.post(update);
+    assert.equal(redelivery.status, 200);
+    assert.equal(redelivery.body.status, "duplicate");
+    assert.ok(!redelivery.text.includes("SQLITE"));
+    assert.equal((await srv.state(2301, 7001)).inboundMessages, 1); // business processing did not rerun
+
+    await assertStillServing(srv, 2302, 7002);
+  } finally {
+    await srv.stop();
   }
 });

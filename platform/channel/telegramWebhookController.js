@@ -41,10 +41,26 @@ export function createTelegramWebhookHandler({ repos, services, router }) {
       return res.json({ status: "ignored", channel: "telegram", reason: "missing_sender" });
     }
 
+    // Express 4 ignores this handler's promise, so any throw that escapes it
+    // is an unhandled rejection and takes down the whole process. Every
+    // idempotency-store call below is therefore guarded individually.
     const dedupeKey = `${DEDUPE_KEY_PREFIX}${event.updateId}`;
-    const isNew = repos.webhookEvents.reserve(dedupeKey, "telegram_message");
+    let isNew;
+    try {
+      isNew = repos.webhookEvents.reserve(dedupeKey, "telegram_message");
+    } catch (err) {
+      // Nothing was recorded, so Telegram's redelivery will be processed normally.
+      logger.error("WEBHOOK", "telegram idempotency reserve failed", { requestId, updateId: event.updateId, error: err.message });
+      return res.status(500).json({ status: "error", error: "internal_error" });
+    }
     if (!isNew) {
-      const cached = repos.webhookEvents.getCachedResponse(dedupeKey);
+      let cached = null;
+      try {
+        cached = repos.webhookEvents.getCachedResponse(dedupeKey);
+      } catch (err) {
+        // Already reserved: must never fall through to processing it again.
+        logger.error("WEBHOOK", "telegram cached response lookup failed", { requestId, updateId: event.updateId, error: err.message });
+      }
       logger.info("WEBHOOK", "duplicate telegram update_id, returning cached result", {
         requestId,
         updateId: event.updateId,
@@ -78,7 +94,13 @@ export function createTelegramWebhookHandler({ repos, services, router }) {
       responsePayload = { status: "error", error: "internal_error" };
     }
 
-    repos.webhookEvents.saveResponse(dedupeKey, responsePayload);
+    try {
+      repos.webhookEvents.saveResponse(dedupeKey, responsePayload);
+    } catch (err) {
+      // Processing already happened; a redelivery gets the duplicate
+      // placeholder rather than being processed a second time.
+      logger.error("WEBHOOK", "telegram response cache write failed", { requestId, updateId: event.updateId, error: err.message });
+    }
     const httpStatus = responsePayload.status === "error" ? 500 : 200;
     return res.status(httpStatus).json(responsePayload);
   };
