@@ -21,7 +21,10 @@ async function fetchWithTimeout(url, options, timeoutMs) {
 // but bound to the Tổng Đài OA's own credential (platformConfig), which is
 // a different Zalo OA account than any merchant's — hence a separate
 // client rather than reusing A Tiểu's (which is wired to A Tiểu's token).
-export async function sendPlatformTextMessage(zaloUserId, text) {
+// `fetchImpl` is injectable (same pattern A Tiểu's own sendTextMessage
+// already uses) so tests can exercise retry/timeout/error handling
+// deterministically, without a real network call.
+export async function sendPlatformTextMessage(zaloUserId, text, { fetchImpl = fetchWithTimeout } = {}) {
   if (!platformConfig.zaloAccessToken) {
     logger.warn("ZALO", "PLATFORM_ZALO_OA_ACCESS_TOKEN not configured, skipping send", { zaloUserId });
     return { ok: false, error: "PLATFORM_ZALO_OA_ACCESS_TOKEN not configured" };
@@ -32,7 +35,7 @@ export async function sendPlatformTextMessage(zaloUserId, text) {
 
   for (let attempt = 1; attempt <= platformConfig.zaloSendRetries; attempt++) {
     try {
-      const res = await fetchWithTimeout(
+      const res = await fetchImpl(
         SEND_MESSAGE_URL,
         { method: "POST", headers: { "content-type": "application/json", access_token: platformConfig.zaloAccessToken }, body },
         platformConfig.zaloSendTimeoutMs

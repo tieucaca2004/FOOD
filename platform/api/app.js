@@ -9,6 +9,8 @@ import { merchantOrderRoutes } from "./routes/merchantOrderRoutes.js";
 import { searchRoutes } from "./routes/searchRoutes.js";
 import { healthRoutes } from "./routes/healthRoutes.js";
 import { createPlatformWebhookHandler } from "../channel/webhookController.js";
+import { zaloWebhookSecurity } from "./middleware/zaloWebhookSecurity.js";
+import { sanitizeWebhookErrors } from "./middleware/sanitizeWebhookErrors.js";
 
 export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router }) {
   const app = express();
@@ -31,7 +33,7 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
   app.use("/api/platform", merchantOrderRoutes({ merchantOrderService: services.merchantOrders, merchantAuthService: services.merchantAuth }));
   app.use("/api/platform", searchRoutes(discovery));
 
-  app.post(platformConfig.webhookPath, createPlatformWebhookHandler({ repos, services, router }));
+  app.post(platformConfig.webhookPath, zaloWebhookSecurity, sanitizeWebhookErrors, createPlatformWebhookHandler({ repos, services, router }));
 
   app.use(platformNotFound);
   app.use(platformErrorHandler);
