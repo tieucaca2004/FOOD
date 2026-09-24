@@ -13,12 +13,18 @@ import { DiscoveryEngine } from "../../discovery/DiscoveryEngine.js";
 import { AgentSearchService } from "../../services/agentSearchService.js";
 import { PlatformRouter } from "../../router/PlatformRouter.js";
 import { createPlatformApp } from "../../api/app.js";
+import { platformConfig } from "../../config.js";
 
 // Reuses A Tiểu's OWN test helper (test/helpers/testApp.js) completely
 // unmodified — this is exactly how a real "future merchant" onboarding
 // would plug in a second real module: build its own engine, hand it to a
 // factory, register it.
 import { buildTestContext as buildAtieuTestContext } from "../../../test/helpers/testApp.js";
+
+// The testApp.js import above already blocks real messaging APIs; also clear
+// the platform's own credentials so no test even attempts a send by default.
+platformConfig.zaloAccessToken = "";
+platformConfig.telegramBotToken = "";
 
 const FREE_PLAN = { plan_id: "free", name: "Free", price: 0, trial_days: null };
 

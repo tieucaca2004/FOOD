@@ -1,7 +1,12 @@
 // Guards the test infrastructure itself: no automated test may reach the real
-// Telegram Bot API, even when a developer's .env provides real credentials.
+// Telegram or Zalo APIs, even when a developer's .env provides real credentials.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildTestPlatform } from "../helpers/testPlatform.js";
 import { buildTestContext } from "../../../test/helpers/testApp.js";
 import { config as atieuConfig } from "../../../src/config.js";
@@ -55,4 +60,38 @@ test("the platform test harness (buildTestPlatform) inherits the same fake notif
     assert.equal(telegramCalls.length, 0);
     assert.equal(platform.atieuCtx.sentNotifications.length, 1);
   });
+});
+
+test("with real-looking credentials in the environment, the test harness clears them and blocks the messaging APIs", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const url = (relative) => JSON.stringify(pathToFileURL(path.resolve(here, relative)).href);
+  const script = `
+    await import(${url("../helpers/testPlatform.js")});
+    const { platformConfig } = await import(${url("../../config.js")});
+    const { config } = await import(${url("../../../src/config.js")});
+    const blocked = (target) => fetch(target, { method: "POST" }).then(() => false, (e) => /blocked in tests/.test(e.message));
+    process.stdout.write(JSON.stringify({
+      platformZalo: platformConfig.zaloAccessToken,
+      platformTelegram: platformConfig.telegramBotToken,
+      atieuZalo: config.zaloAccessToken,
+      telegramBlocked: await blocked("https://api.telegram.org/botX/sendMessage"),
+      zaloBlocked: await blocked("https://openapi.zalo.me/v3.0/oa/message/cs"),
+    }));
+  `;
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "harness-safety-"));
+  try {
+    const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
+      cwd,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PLATFORM_ZALO_OA_ACCESS_TOKEN: "fake-platform-zalo",
+        PLATFORM_TELEGRAM_BOT_TOKEN: "111:fake-platform-telegram",
+        ZALO_OA_ACCESS_TOKEN: "fake-atieu-zalo",
+      },
+    });
+    assert.deepEqual(JSON.parse(out), { platformZalo: "", platformTelegram: "", atieuZalo: "", telegramBlocked: true, zaloBlocked: true });
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
 });
