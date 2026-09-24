@@ -151,7 +151,7 @@ export class PlatformRouter {
 
   _greetingText() {
     return [
-      "Dạ em chào anh/chị, em là trợ lý của TỔNG ĐÀI — nơi tìm và đặt món từ nhiều quán ăn qua Zalo.",
+      "Dạ em chào anh/chị, em là trợ lý của TỔNG ĐÀI — nơi tìm và đặt món từ nhiều quán ăn.",
       "Anh/chị muốn ăn gì hôm nay ạ? (VD: \"Tôi muốn ăn hủ tiếu xào\")",
     ].join("\n");
   }

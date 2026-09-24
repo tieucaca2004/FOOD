@@ -18,12 +18,24 @@ async function confirmOneOrder(ctx, customer) {
 
 test("without Telegram configured, notification is logged (not faked as sent)", async () => {
   const ctx = buildTestContext();
-  const customer = makeCustomer(ctx);
-  const confirmed = await confirmOneOrder(ctx, customer);
+  // Make "not configured" true regardless of the developer's .env.
+  const { config } = await import("../../src/config.js");
+  const prevToken = config.telegramBotToken;
+  const prevChat = config.telegramChatId;
+  config.telegramBotToken = "";
+  config.telegramChatId = "";
+  try {
+    const customer = makeCustomer(ctx);
+    const confirmed = await confirmOneOrder(ctx, customer);
 
-  const notifications = ctx.repos.notifications.listByOrder(confirmed.id);
-  assert.equal(notifications.length, 1);
-  assert.equal(notifications[0].status, "skipped_no_channel");
+    const notifications = ctx.repos.notifications.listByOrder(confirmed.id);
+    assert.equal(notifications.length, 1);
+    assert.equal(notifications[0].status, "skipped_no_channel");
+    assert.equal(ctx.sentNotifications.length, 0);
+  } finally {
+    config.telegramBotToken = prevToken;
+    config.telegramChatId = prevChat;
+  }
 });
 
 test("Telegram failure is recorded as failed, never reported as sent", async () => {

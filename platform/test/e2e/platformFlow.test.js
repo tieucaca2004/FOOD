@@ -63,6 +63,17 @@ test("ACCEPTANCE §33: greeting -> search -> open A Tiểu -> menu -> add to car
   assert.equal(platformOrders.length, 0);
 });
 
+test("the platform greeting is channel-neutral (every channel shares this router)", async () => {
+  const platform = buildTestPlatform();
+  const state = customerCtx(platform);
+  const r = await say(platform, state, "Xin chào");
+  assert.equal(
+    r.replyText,
+    'Dạ em chào anh/chị, em là trợ lý của TỔNG ĐÀI — nơi tìm và đặt món từ nhiều quán ăn.\nAnh/chị muốn ăn gì hôm nay ạ? (VD: "Tôi muốn ăn hủ tiếu xào")'
+  );
+  assert.doesNotMatch(r.replyText, /Zalo|Telegram/);
+});
+
 test("merchant context: a follow-up message is routed straight into A Tiểu, not re-searched platform-wide", async () => {
   const platform = buildTestPlatform();
   const state = customerCtx(platform);

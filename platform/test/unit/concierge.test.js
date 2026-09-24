@@ -6,6 +6,17 @@ test("greeting", () => {
   assert.equal(classifyConciergeIntent("Xin chào").intent, "greeting");
 });
 
+test("the chat-app /start command is a greeting, with or without a bot mention or payload", () => {
+  for (const text of ["/start", "/start@ChefBotAI_bot", "/START", "/start ref123"]) {
+    assert.equal(classifyConciergeIntent(text).intent, "greeting", text);
+  }
+});
+
+test("text that merely resembles /start is not treated as the command", () => {
+  const r = classifyConciergeIntent("/started hủ tiếu");
+  assert.notEqual(r.intent, "greeting");
+});
+
 test("generic food/category search reduces filler words to keywords", () => {
   const r = classifyConciergeIntent("Tôi muốn ăn hủ tiếu xào.");
   assert.equal(r.intent, "search_food");

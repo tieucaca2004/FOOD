@@ -4,6 +4,9 @@
 // key. AI (platform/ai/) may only ever suggest a fallback for `unknown`.
 
 const GREETING = /(xin chào|chào tổng đài|chào shop|^chào$|^hi$|^hello$|^alo$)/;
+// Chat-app bot start command, optionally addressed ("/start@SomeBot") or
+// carrying a deep-link payload ("/start ref123").
+const START_COMMAND = /^\/start(@\w+)?(\s|$)/;
 const RETURN_TO_PLATFORM = /(quay lại tổng đài|quay lại|tìm quán khác|đổi quán|thoát quán|thoát ra)/;
 const GLOBAL_SEARCH_TRIGGER = /(quán nào khác|chỗ khác|nơi khác).*(bán|có)/;
 
@@ -26,7 +29,7 @@ export function classifyConciergeIntent(text) {
   const raw = (text || "").trim();
   const lower = raw.toLowerCase();
 
-  if (GREETING.test(lower)) return { intent: "greeting", merchantNameHint: null, searchKeywords: null };
+  if (GREETING.test(lower) || START_COMMAND.test(lower)) return { intent: "greeting", merchantNameHint: null, searchKeywords: null };
   if (RETURN_TO_PLATFORM.test(lower)) return { intent: "return_to_platform", merchantNameHint: null, searchKeywords: null };
   if (GLOBAL_SEARCH_TRIGGER.test(lower)) {
     return { intent: "global_search", merchantNameHint: null, searchKeywords: null };

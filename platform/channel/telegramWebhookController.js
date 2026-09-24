@@ -1,5 +1,6 @@
 import { normalizeTelegramUpdate } from "./telegram/normalizeTelegramUpdate.js";
 import { sendTelegramMessage } from "./telegram/telegramClient.js";
+import { logFunnelEvents } from "./funnelAnalytics.js";
 import { logger } from "../../src/logger.js";
 
 // Namespace prefixes so this channel can never collide with Zalo's values
@@ -80,6 +81,14 @@ export function createTelegramWebhookHandler({ repos, services, router }) {
       const result = await router.handle({ customer, session, text: event.text });
 
       repos.messages.log({ sessionId: session.id, direction: "out", rawText: result.replyText });
+
+      // Analytics is observational: by now the router may already have placed
+      // an order, so a failure here must not turn the update into an error.
+      try {
+        logFunnelEvents(repos, customer, result);
+      } catch (err) {
+        logger.error("WEBHOOK", "telegram funnel analytics failed", { requestId, updateId: event.updateId, error: err.message });
+      }
 
       const sendResult = result.replyText
         ? await sendTelegramMessage({ chatId: event.externalChatId, text: result.replyText })

@@ -142,6 +142,20 @@ test("Telegram business E2E: search → A Tiểu → real menu → cart → orde
       assert.deepEqual(orderDetail.items.map((i) => [i.product_name, i.quantity, i.line_total]), [[product.name, 2, product.price * 2]]);
       assert.equal(platform.atieuCtx.repos.orders.listByCustomer(otherAtieuCustomer.id, 10).length, 0);
 
+      // Funnel analytics: the same shared recorder the Zalo channel uses.
+      const events = platform.db
+        .prepare("SELECT merchant_id, event_type, external_ref FROM merchant_events WHERE customer_id = ? ORDER BY id")
+        .all(customer.id);
+      const types = events.map((e) => e.event_type);
+      for (const expected of ["SEARCH", "MERCHANT_VIEW", "ADD_TO_CART", "CHECKOUT_STARTED", "ORDER_CREATED"]) {
+        assert.ok(types.includes(expected), `missing ${expected}: ${types.join(",")}`);
+      }
+      assert.deepEqual(events.find((e) => e.event_type === "SEARCH"), { merchant_id: null, event_type: "SEARCH", external_ref: null });
+      assert.ok(events.filter((e) => e.event_type !== "SEARCH").every((e) => e.merchant_id === "ATIEU001"));
+      assert.equal(events.find((e) => e.event_type === "ORDER_CREATED").external_ref, orders[0].order_code);
+      const searches = platform.db.prepare("SELECT query_text, result_count FROM search_events WHERE customer_id = ?").all(customer.id);
+      assert.deepEqual(searches, [{ query_text: "hủ tiếu xào", result_count: 1 }]);
+
       // 9. Platform-side persistence: one customer, one session, every message logged.
       assert.equal(platform.db.prepare("SELECT COUNT(*) AS n FROM platform_sessions WHERE customer_id = ?").get(customer.id).n, 1);
       const logged = platform.db
@@ -151,15 +165,73 @@ test("Telegram business E2E: search → A Tiểu → real menu → cart → orde
 
       // Telegram replies: every processed update answered in the originating
       // chat with the platform bot; the order notification went through A
-      // Tiểu's own notifier and bot, never the customer-facing bot.
-      const platformSends = botApiCalls.filter((c) => c.url.includes(PLATFORM_BOT_TOKEN));
-      const atieuSends = botApiCalls.filter((c) => c.url.includes(ATIEU_BOT_TOKEN));
-      assert.equal(platformSends.length + atieuSends.length, botApiCalls.length);
-      assert.equal(platformSends.filter((c) => c.body.chat_id === String(USER)).length, 7);
-      assert.equal(platformSends.filter((c) => c.body.chat_id === String(OTHER_USER)).length, 3);
-      assert.equal(atieuSends.length, 1);
-      assert.equal(atieuSends[0].body.chat_id, ATIEU_CHAT_ID);
-      assert.match(atieuSends[0].body.text, new RegExp(`#${orders[0].order_code}`));
+      // Tiểu's own notifier (the test context's fake sender), never the
+      // customer-facing bot.
+      assert.ok(botApiCalls.every((c) => c.url.includes(PLATFORM_BOT_TOKEN)));
+      assert.equal(botApiCalls.filter((c) => c.body.chat_id === String(USER)).length, 7);
+      assert.equal(botApiCalls.filter((c) => c.body.chat_id === String(OTHER_USER)).length, 3);
+      const ownerNotifications = platform.atieuCtx.sentNotifications;
+      assert.equal(ownerNotifications.length, 1);
+      assert.equal(ownerNotifications[0].botToken, ATIEU_BOT_TOKEN);
+      assert.equal(ownerNotifications[0].chatId, ATIEU_CHAT_ID);
+      assert.match(ownerNotifications[0].text, new RegExp(`#${orders[0].order_code}`));
+    } finally {
+      server.close();
+    }
+  });
+});
+
+test("Telegram /start (plain or bot-addressed) gets the platform greeting, not a failed food search", async () => {
+  await withIsolatedTelegram(async (botApiCalls) => {
+    const platform = buildTestPlatform({ withAtieu: true });
+    const server = await startServer(platform.app);
+    try {
+      let updateId = 95000;
+      for (const text of ["/start", "/start@ChefBotAI_bot"]) {
+        const res = await fetch(`${baseUrl(server)}${platformConfig.telegramWebhookPath}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": WEBHOOK_SECRET },
+          body: JSON.stringify(update({ userId: 7101, updateId: ++updateId, text })),
+        });
+        const body = await res.json();
+        assert.equal(body.status, "processed");
+        assert.match(body.reply_text, /em là trợ lý của TỔNG ĐÀI/);
+        assert.doesNotMatch(body.reply_text, /chưa tìm thấy quán nào/);
+        assert.doesNotMatch(body.reply_text, /Zalo/);
+      }
+      assert.equal(botApiCalls.length, 2);
+
+      // A normal food search is unaffected.
+      const search = await fetch(`${baseUrl(server)}${platformConfig.telegramWebhookPath}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": WEBHOOK_SECRET },
+        body: JSON.stringify(update({ userId: 7101, updateId: 95100, text: "Tôi muốn ăn hủ tiếu xào" })),
+      });
+      assert.match((await search.json()).reply_text, /HỦ TIẾU XÀO A TIỂU/);
+    } finally {
+      server.close();
+    }
+  });
+});
+
+test("a funnel-analytics failure does not break the Telegram conversation", async () => {
+  await withIsolatedTelegram(async (botApiCalls) => {
+    const platform = buildTestPlatform({ withAtieu: true });
+    const server = await startServer(platform.app);
+    platform.repos.analytics.logSearch = () => {
+      throw new Error("SQLITE_BUSY: database is locked");
+    };
+    try {
+      const res = await fetch(`${baseUrl(server)}${platformConfig.telegramWebhookPath}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": WEBHOOK_SECRET },
+        body: JSON.stringify(update({ userId: 7201, updateId: 96001, text: "Tôi muốn ăn hủ tiếu xào" })),
+      });
+      const body = await res.json();
+      assert.equal(res.status, 200);
+      assert.equal(body.status, "processed");
+      assert.match(body.reply_text, /HỦ TIẾU XÀO A TIỂU/);
+      assert.equal(botApiCalls.length, 1);
     } finally {
       server.close();
     }
