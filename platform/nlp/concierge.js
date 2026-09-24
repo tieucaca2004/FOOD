@@ -9,11 +9,18 @@ const GREETING = /(xin chào|chào tổng đài|chào shop|^chào$|^hi$|^hello$|
 const START_COMMAND = /^\/start(@\w+)?(\s|$)/;
 const RETURN_TO_PLATFORM = /(quay lại tổng đài|quay lại|tìm quán khác|đổi quán|thoát quán|thoát ra)/;
 const GLOBAL_SEARCH_TRIGGER = /(quán nào khác|chỗ khác|nơi khác).*(bán|có)/;
+// Choosing from the search results just shown: a position ("1", "quán số 2",
+// "chọn quán 2"), or a confirmation that only makes sense when exactly one
+// merchant was listed ("ok", "chọn quán này"). The router decides whether
+// there is a list to choose from.
+const SELECT_RESULT_NUMBER = /^(?:(?:chọn|vào|xem|mở)\s+)?(?:quán\s+)?(?:số\s+)?(\d{1,3})$/;
+const SELECT_THIS_RESULT = /^(?:ok|oke|okay|được|đồng ý|(?:chọn|vào|xem|mở)?\s*quán (?:này|đó))$/;
 
 function extractMerchantNameHint(text) {
   const patterns = [
     /(?:muốn ăn ở|ăn ở|ăn tại|ở quán|tại quán)\s+(.+)/i,
     /(?:xem|chọn|mở)\s+(?:quán\s+)?(.+)/i,
+    /^vào\s+(?:quán\s+)?(.+)/i,
   ];
   for (const re of patterns) {
     const m = text.match(re);
@@ -43,6 +50,11 @@ export function classifyConciergeIntent(text) {
   if (GLOBAL_SEARCH_TRIGGER.test(lower)) {
     return { intent: "global_search", merchantNameHint: null, searchKeywords: null };
   }
+
+  const selection = cleanNameHint(lower);
+  const numbered = selection.match(SELECT_RESULT_NUMBER);
+  if (numbered) return { intent: "select_result_number", resultNumber: Number(numbered[1]), merchantNameHint: null, searchKeywords: null };
+  if (SELECT_THIS_RESULT.test(selection)) return { intent: "select_this_result", merchantNameHint: null, searchKeywords: null };
 
   const merchantNameHint = extractMerchantNameHint(raw);
   if (merchantNameHint) {

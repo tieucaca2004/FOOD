@@ -171,6 +171,15 @@ hơn 32 ký tự, mọi request admin trả `503 admin_api_disabled`. Sai/thiế
 token → `401 unauthenticated`. API key của merchant không dùng được cho
 admin API, và admin token không dùng được cho route merchant.
 
+Chọn quán sau khi tìm (chat): kết quả tìm kiếm được đánh số `[1]`, `[2]`…
+theo đúng thứ tự lưu trong session. Ngay sau danh sách đó, khách gõ số
+(`1`, `quán số 2`, `chọn quán 2`), `ok`/`chọn quán này` (chỉ khi danh sách
+có đúng 1 quán — nhiều quán thì hỏi lại, không đoán), hoặc tên quán không kèm
+động từ (`A Tiểu`, chỉ khi không phải tên món và khớp đúng 1 quán trong danh
+sách). Danh sách chỉ có hiệu lực cho lượt ngay sau nó: tìm mới thay thế nó,
+mọi lượt khác (chào, mở quán…) xoá nó; chọn sai số/`ok` khi nhiều quán thì
+giữ lại để chọn lại. `vào quán <tên>` mở quán theo tên như `xem <tên>`.
+
 Onboarding một merchant mới (spec §31): `create merchant` (PENDING) →
 `admin activate` → merchant xuất hiện trong Discovery. **Không cần sửa**
 AI Concierge / DiscoveryEngine / PlatformRouter / MerchantRegistry cho

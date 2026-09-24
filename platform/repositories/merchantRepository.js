@@ -1,10 +1,5 @@
 import { isDiscoverable, deriveAccountFieldsFromLegacyStatus } from "../domain/merchantStatus.js";
-import { stripAccents } from "../../src/nlp/normalize.js"; // generic, read-only reuse (same folding dish search uses)
-
-// Case- and accent-insensitive form of a merchant name or typed fragment.
-function foldName(text) {
-  return stripAccents(text.normalize("NFC")).replace(/\s+/g, " ").trim();
-}
+import { foldText } from "../nlp/foldText.js";
 
 export class MerchantRepository {
   constructor(db) {
@@ -34,9 +29,9 @@ export class MerchantRepository {
   // only, so "HỦ TIẾU" never matched "Hủ Tiếu"; matching happens here
   // instead. The fragment is literal: %, _ and \ are not wildcards.
   findByNameFragment(text) {
-    const fragment = foldName(text);
+    const fragment = foldText(text);
     if (fragment === "") return [];
-    return this.listAll().filter((m) => foldName(m.name).includes(fragment));
+    return this.listAll().filter((m) => foldText(m.name).includes(fragment));
   }
 
   create(merchant) {
