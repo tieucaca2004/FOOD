@@ -77,7 +77,10 @@ Platform tự boot CẢ engine A Tiểu bên trong (đọc/tạo `data/atieu.db`
 chưa có, migrate + seed y như `npm start` ở gốc làm) — không cần chạy
 `npm start` riêng để platform hoạt động. Bạn vẫn CÓ THỂ chạy A Tiểu độc lập
 song song (`npm start`, port 3900) nếu cần API/webhook riêng của nó — cả hai
-process mở cùng file SQLite qua WAL, an toàn cho V1.
+process mở cùng file SQLite qua WAL, an toàn cho V1. Lưu ý: REST API của
+A Tiểu trên port 3900 **không có xác thực** và lắng nghe trên mọi interface
+— không trỏ tunnel/Cloudflare vào port 3900 (tunnel của platform trỏ vào
+3901), xem README gốc mục 7.
 
 ## 4. Test
 

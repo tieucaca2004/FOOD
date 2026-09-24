@@ -143,7 +143,9 @@ npm test
 
 1. Deploy service có domain HTTPS công khai (hoặc ngrok khi test).
 2. nginx reverse-proxy `https://yourdomain.com/zalo/webhook` →
-   `http://127.0.0.1:3900/zalo/webhook`.
+   `http://127.0.0.1:3900/zalo/webhook` — **chỉ path này**. Không trỏ
+   ngrok/tunnel vào cả port 3900: như vậy REST API không xác thực ở mục 7
+   cũng bị public.
 3. Trên [oa.zalo.me](https://oa.zalo.me) → OA của bạn → Webhook → khai báo
    URL trên, đăng ký event `user_send_text` (bắt buộc).
 4. Lấy Access Token, điền `ZALO_OA_ACCESS_TOKEN`.
@@ -152,6 +154,13 @@ npm test
    không để webhook bị lỗi/timeout).
 
 ## 7. REST API
+
+> **Bảo mật:** REST API này KHÔNG có xác thực — ai gọi được tới port 3900
+> đều tạo được đơn CONFIRMED (gửi thông báo Telegram cho quán), đổi trạng
+> thái đơn, và đọc thông tin khách (SĐT, địa chỉ) theo id. Server lắng nghe
+> trên mọi network interface. Không expose port 3900 ra Internet hay mạng
+> LAN dùng chung: chỉ dùng từ localhost, và chỉ public `/zalo/webhook` qua
+> reverse proxy (mục 6).
 
 ```
 GET    /api/menu
@@ -207,6 +216,8 @@ lại, không tạo đơn thứ 2. Có test HTTP-level xác nhận việc này.
 - Secrets chỉ qua env, không hard-code, `.env` trong `.gitignore`.
 - `src/logger.js` tự động redact field tên chứa `token`/`secret`/`password`/…
 - Rate limit in-memory theo IP cho toàn bộ `/api` + webhook.
+- REST API `/api/*` không có xác thực — an toàn chỉ khi port 3900 không bị
+  expose (xem mục 7 và 12).
 - Validation tay cho mọi input REST (`src/api/middleware/validate.js`) —
   reject quantity ≤0, không phải integer, vượt `MAX_ITEM_QUANTITY`; reject
   product id không tồn tại; không bao giờ tin giá/tổng từ client hay từ AI.
@@ -220,9 +231,13 @@ docker build -t atieu-ordering-engine .
 docker run -d --name atieu \
   --env-file .env \
   -v atieu-data:/data \
-  -p 3900:3900 \
+  -p 127.0.0.1:3900:3900 \
   atieu-ordering-engine
 ```
+
+`-p 127.0.0.1:3900:3900` chỉ mở port trên loopback của máy host. Không dùng
+`-p 3900:3900` — Docker sẽ mở trên mọi interface (và thường vượt qua
+firewall của host), làm REST API không xác thực bị truy cập từ máy khác.
 
 Image tự chạy `migrate` + `seed` (idempotent) trước khi start server. Nếu
 `better-sqlite3` build native fail trên máy bạn (thiếu prebuilt binary cho
