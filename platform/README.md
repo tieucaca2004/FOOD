@@ -130,15 +130,32 @@ bá. Không có kết quả "giả danh organic".
 ## 8. REST API (admin/onboarding/debug)
 
 ```
+# Admin — Authorization: Bearer <PLATFORM_ADMIN_API_TOKEN>
 GET    /api/platform/merchants
 GET    /api/platform/merchants/:id
 POST   /api/platform/merchants        { merchantId, name, slug, module, ... }
 PATCH  /api/platform/merchants/:id/status   { action: 'activate'|'suspend'|'close' }
+POST   /api/platform/merchants/:id/api-keys  → { api_key } (chỉ trả về 1 lần)
+
+# Merchant — Authorization: Bearer <api_key của merchant>
+GET    /api/platform/merchant/orders
+GET    /api/platform/merchant/orders/:orderId
+POST   /api/platform/merchant/orders/:orderId/receive
+
+# Public
 GET    /api/platform/search?q=...
 GET    /api/platform/health
 GET    /api/platform/readiness
+
+# Webhook (xác thực bằng chữ ký Zalo / secret token Telegram)
 POST   /platform/webhook
+POST   /api/platform/webhook/telegram
 ```
+
+Admin API **fail closed**: nếu `PLATFORM_ADMIN_API_TOKEN` chưa đặt hoặc ngắn
+hơn 32 ký tự, mọi request admin trả `503 admin_api_disabled`. Sai/thiếu
+token → `401 unauthenticated`. API key của merchant không dùng được cho
+admin API, và admin token không dùng được cho route merchant.
 
 Onboarding một merchant mới (spec §31): `create merchant` (PENDING) →
 `admin activate` → merchant xuất hiện trong Discovery. **Không cần sửa**

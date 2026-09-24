@@ -11,6 +11,7 @@ import { DiscoveryEngine } from "./discovery/DiscoveryEngine.js";
 import { AgentSearchService } from "./services/agentSearchService.js";
 import { PlatformRouter } from "./router/PlatformRouter.js";
 import { createPlatformApp } from "./api/app.js";
+import { configuredAdminToken, ADMIN_TOKEN_MIN_LENGTH } from "./api/middleware/adminAuth.js";
 
 // A Tiểu's own engine, imported UNCHANGED — this is the "Merchant Matrix"
 // running in-process, exactly as it does standalone via src/server.js. The
@@ -60,6 +61,10 @@ const server = app.listen(platformConfig.port, () => {
     webhookPath: platformConfig.webhookPath,
     aiProvider: platformConfig.aiProvider,
   });
+  // Reports presence only; the token itself is never logged.
+  if (!configuredAdminToken()) {
+    logger.warn("APP", `PLATFORM_ADMIN_API_TOKEN is not set (or shorter than ${ADMIN_TOKEN_MIN_LENGTH} characters): the admin API /api/platform/merchants* refuses every request`);
+  }
 });
 
 function shutdown(signal) {

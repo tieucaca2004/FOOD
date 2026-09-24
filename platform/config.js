@@ -49,6 +49,11 @@ export const platformConfig = {
   // doesn't specify its own trial_days.
   defaultTrialDays: Number(process.env.DEFAULT_TRIAL_DAYS || 14),
 
+  // Bearer token for the platform admin API (/api/platform/merchants*:
+  // listing, onboarding, status changes, merchant API-key issuance). Unset
+  // or shorter than 32 characters means the admin API refuses every request.
+  adminApiToken: process.env.PLATFORM_ADMIN_API_TOKEN || "",
+
   rateLimitWindowMs: Number(process.env.PLATFORM_RATE_LIMIT_WINDOW_MS || 60_000),
   rateLimitMax: Number(process.env.PLATFORM_RATE_LIMIT_MAX || 60),
 

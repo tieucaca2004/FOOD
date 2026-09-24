@@ -11,9 +11,8 @@ function hashKey(key) {
  * Phase 7 minimum merchant authentication boundary. Deliberately NOT a
  * user-management platform: no passwords, no reset flow, no OAuth/SSO, no
  * RBAC — a single opaque per-merchant-user API key, issued by an admin
- * action (same unauthenticated admin trust boundary the existing
- * /api/platform/merchants onboarding endpoints already use — Phase 7
- * does not introduce a new admin-auth system, only a merchant one).
+ * action (POST /api/platform/merchants/:id/api-keys, behind the platform
+ * admin token — platform/api/middleware/adminAuth.js).
  *
  * SECURITY: the plaintext key is returned exactly once, at issuance —
  * only its SHA-256 hash is ever persisted (merchant_users.api_key_hash,

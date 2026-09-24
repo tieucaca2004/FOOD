@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTestPlatform, startServer, baseUrl } from "../helpers/testPlatform.js";
+import { buildTestPlatform, startServer, baseUrl, ADMIN_AUTH_HEADER } from "../helpers/testPlatform.js";
 
 function zaloPayload({ zaloUserId, text, messageId }) {
   return { event_name: "user_send_text", sender: { id: zaloUserId }, message: { text, msg_id: messageId }, timestamp: Date.now() };
@@ -100,7 +100,7 @@ test("merchant onboarding + admin review API: PENDING -> not discoverable -> act
   try {
     const createRes = await fetch(`${baseUrl(server)}/api/platform/merchants`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...ADMIN_AUTH_HEADER },
       body: JSON.stringify({ merchantId: "QUANF001", name: "Quán F", slug: "quan-f", module: "generic" }),
     });
     assert.equal(createRes.status, 201);
@@ -109,13 +109,14 @@ test("merchant onboarding + admin review API: PENDING -> not discoverable -> act
     const searchBody = await searchRes.json();
     assert.equal(searchBody.organic.length, 0); // PENDING, not yet discoverable
 
-    await fetch(`${baseUrl(server)}/api/platform/merchants/QUANF001/status`, {
+    const activateRes = await fetch(`${baseUrl(server)}/api/platform/merchants/QUANF001/status`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...ADMIN_AUTH_HEADER },
       body: JSON.stringify({ action: "activate" }),
     });
+    assert.equal(activateRes.status, 200);
 
-    const getRes = await fetch(`${baseUrl(server)}/api/platform/merchants/QUANF001`);
+    const getRes = await fetch(`${baseUrl(server)}/api/platform/merchants/QUANF001`, { headers: ADMIN_AUTH_HEADER });
     const getBody = await getRes.json();
     assert.equal(getBody.merchant.status, "TRIAL");
   } finally {

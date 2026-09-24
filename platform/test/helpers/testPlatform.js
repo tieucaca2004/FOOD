@@ -26,6 +26,12 @@ import { buildTestContext as buildAtieuTestContext } from "../../../test/helpers
 platformConfig.zaloAccessToken = "";
 platformConfig.telegramBotToken = "";
 
+// A fake admin token, so tests never use a real PLATFORM_ADMIN_API_TOKEN from
+// a developer's .env. Tests that drive the admin API send ADMIN_AUTH_HEADER.
+export const TEST_ADMIN_TOKEN = "test-only-admin-token-" + "0".repeat(40);
+export const ADMIN_AUTH_HEADER = { authorization: `Bearer ${TEST_ADMIN_TOKEN}` };
+platformConfig.adminApiToken = TEST_ADMIN_TOKEN;
+
 const FREE_PLAN = { plan_id: "free", name: "Free", price: 0, trial_days: null };
 
 // TEST-ONLY generic merchant fixtures — never present in production seed

@@ -37,6 +37,13 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
     })
   );
 
+  // Authorization zones:
+  //   public   /api/platform/health, /readiness, /search
+  //   admin    /api/platform/merchants*  (platform admin bearer token, fail closed;
+  //            applied inside merchantRoutes and merchantAuthRoutes so the guard
+  //            matches exactly the paths their routes match)
+  //   merchant /api/platform/merchant/*  (per-merchant API key, see merchantOrderRoutes)
+  //   webhooks Zalo and Telegram paths below (channel signature / secret token)
   app.use("/api/platform", healthRoutes(db));
   app.use("/api/platform", merchantRoutes({ services, repos, registry }));
   app.use("/api/platform", merchantAuthRoutes({ merchantAuthService: services.merchantAuth }));

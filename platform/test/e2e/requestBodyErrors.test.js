@@ -3,7 +3,7 @@
 // platformErrorHandler. These tests drive the real app over HTTP.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTestPlatform, startServer, baseUrl } from "../helpers/testPlatform.js";
+import { buildTestPlatform, startServer, baseUrl, ADMIN_AUTH_HEADER } from "../helpers/testPlatform.js";
 import { platformConfig } from "../../config.js";
 
 const SANITIZED = { status: "error", error: "invalid_request_body" };
@@ -100,7 +100,7 @@ test("F-3. an unsupported content encoding returns 415 invalid_request_body with
 
 test("F-3 guard. application-generated 400 errors keep their message", async () => {
   await withServer(async ({ url }) => {
-    const res = await post(url("/api/platform/merchants"), "{}");
+    const res = await post(url("/api/platform/merchants"), "{}", ADMIN_AUTH_HEADER);
     assert.equal(res.status, 400);
     assert.deepEqual(res.body, { status: "error", error: "merchantId is required" });
   });
@@ -113,7 +113,8 @@ test("F-3 guard. unexpected internal errors still return 500 internal_error", as
     };
     const res = await post(
       url("/api/platform/merchants"),
-      JSON.stringify({ merchantId: "F3GUARD001", name: "F3 Guard", slug: "f3-guard", module: "generic" })
+      JSON.stringify({ merchantId: "F3GUARD001", name: "F3 Guard", slug: "f3-guard", module: "generic" }),
+      ADMIN_AUTH_HEADER
     );
     assert.equal(res.status, 500);
     assert.deepEqual(res.body, { status: "error", error: "internal_error" });
