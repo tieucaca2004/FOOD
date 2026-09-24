@@ -19,7 +19,8 @@ import { DeliveryService } from "./deliveryService.js";
 // pass deterministic fakes instead of the real config-driven ones — see
 // platform/test/helpers/testPlatform.js).
 export function createPlatformServices(repos, { visionProvider, imageStorage, dispatchPort } = {}) {
-  const merchantData = new MerchantDataService(repos); // read-side: the canonical merchant-record lookup (Phase 1)
+  const subscriptions = new SubscriptionService(repos, new NullBillingProvider());
+  const merchantData = new MerchantDataService(repos, { subscriptions }); // read-side: the canonical merchant-record lookup (Phase 1)
   const menu = new MenuService(repos); // Generic Menu Engine (Phase 3) — generic merchants only, A Tiểu has its own
   const cart = new CartService(repos, menu, merchantData); // Generic Cart Engine (Phase 5) — generic merchants only, A Tiểu has its own
 
@@ -38,7 +39,7 @@ export function createPlatformServices(repos, { visionProvider, imageStorage, di
     // A Tiểu has its own order engine. No payment/delivery dependency —
     // see orderService.js class doc for the business-model boundary.
     orders: new OrderService(repos, cart, menu, merchantData, dispatchPort || new NullMerchantDispatchPort()),
-    subscriptions: new SubscriptionService(repos, new NullBillingProvider()),
+    subscriptions,
     customers: new PlatformCustomerService(repos),
     sessions: new PlatformSessionService(repos),
     payments: new PaymentService(repos), // unused/future scaffolding (Phase 6 does not call this)

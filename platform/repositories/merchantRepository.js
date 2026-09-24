@@ -23,9 +23,11 @@ export class MerchantRepository {
     return this.listAll().filter((m) => isDiscoverable(m.status));
   }
 
+  // The fragment is matched literally: LIKE wildcards typed by a user
+  // (% and _) are escaped rather than interpreted.
   findByNameFragment(text) {
-    const normalized = `%${text.trim()}%`;
-    return this.db.prepare(`SELECT * FROM merchants WHERE name LIKE ? COLLATE NOCASE`).all(normalized);
+    const escaped = text.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
+    return this.db.prepare(`SELECT * FROM merchants WHERE name LIKE ? COLLATE NOCASE ESCAPE '\\'`).all(`%${escaped}%`);
   }
 
   create(merchant) {

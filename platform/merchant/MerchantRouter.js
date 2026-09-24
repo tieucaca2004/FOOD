@@ -8,12 +8,13 @@ import { isAccountDiscoverable } from "../domain/merchantStatus.js";
  * "build me an adapter".
  */
 export class MerchantRouter {
-  constructor(registry) {
+  constructor(registry, { merchantData }) {
     this.registry = registry;
+    this.merchantData = merchantData;
   }
 
   resolve(merchantId) {
-    const merchant = this.registry.repos.merchants.getById(merchantId);
+    const merchant = this.merchantData.getById(merchantId);
     if (!merchant) return { merchant: null, adapter: null };
     return { merchant, adapter: this.registry.getAdapter(merchantId) };
   }
@@ -30,6 +31,11 @@ export class MerchantRouter {
     const { merchant, adapter } = this.resolve(merchantId);
     if (!merchant || !adapter) {
       return { ok: false, reason: "MERCHANT_NOT_FOUND" };
+    }
+    // A merchant that stopped being routable mid-conversation (expired,
+    // suspended, closed) must not keep receiving messages or orders.
+    if (!this.isRoutable(merchant)) {
+      return { ok: false, reason: "MERCHANT_NOT_ROUTABLE" };
     }
     const { replyText, merchantIntent, orderRef } = await adapter.handleMessage(platformCustomerId, text);
     return { ok: true, replyText, merchantIntent, orderRef };

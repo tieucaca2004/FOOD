@@ -17,12 +17,25 @@ import { isAccountDiscoverable } from "../domain/merchantStatus.js";
  * the phase plan, not Phase 1.
  */
 export class MerchantDataService {
-  constructor(repos) {
+  constructor(repos, { subscriptions } = {}) {
     this.repos = repos;
+    this.subscriptions = subscriptions;
+  }
+
+  // Settles an overdue subscription before the merchant row is used (spec
+  // §20, SubscriptionService.expireIfNeeded), so every discovery, routing,
+  // cart and order check reads the merchant's real current status.
+  _withCurrentSubscription(merchant) {
+    if (!merchant || !this.subscriptions) return merchant;
+    const subscription = this.subscriptions.expireIfNeeded(merchant.merchant_id);
+    if (subscription?.status === "EXPIRED" && merchant.account_status !== "EXPIRED") {
+      return this.repos.merchants.getById(merchant.merchant_id);
+    }
+    return merchant;
   }
 
   getById(merchantId) {
-    return this.repos.merchants.getById(merchantId);
+    return this._withCurrentSubscription(this.repos.merchants.getById(merchantId));
   }
 
   getBySlug(slug) {
@@ -36,20 +49,19 @@ export class MerchantDataService {
   listDiscoverable() {
     return this.repos.merchants
       .listAll()
+      .map((m) => this._withCurrentSubscription(m))
       .filter((m) => isAccountDiscoverable({ accountStatus: m.account_status, active: m.active }));
   }
 
   findDiscoverableByNameFragment(text) {
-    return this.repos.merchants
-      .findByNameFragment(text)
-      .filter((m) => isAccountDiscoverable({ accountStatus: m.account_status, active: m.active }));
+    return this.findAnyStatusByNameFragment(text).filter((m) => isAccountDiscoverable({ accountStatus: m.account_status, active: m.active }));
   }
 
   // Any-status lookup — used when the caller needs to distinguish "no such
   // merchant" from "merchant exists but is not currently discoverable"
   // (e.g. to reply "quán này hiện không khả dụng" instead of "không tìm thấy").
   findAnyStatusByNameFragment(text) {
-    return this.repos.merchants.findByNameFragment(text);
+    return this.repos.merchants.findByNameFragment(text).map((m) => this._withCurrentSubscription(m));
   }
 
   isDiscoverable(merchant) {

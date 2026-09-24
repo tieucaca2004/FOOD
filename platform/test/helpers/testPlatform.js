@@ -152,7 +152,7 @@ export function buildTestPlatform({
   }
 
   const registry = new MerchantRegistry({ repos, moduleFactories });
-  const merchantRouter = new MerchantRouter(registry);
+  const merchantRouter = new MerchantRouter(registry, { merchantData: services.merchantData });
   const discovery = new DiscoveryEngine(services.merchantData, registry);
   const agentSearch = new AgentSearchService({ discovery, registry });
   const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai });
