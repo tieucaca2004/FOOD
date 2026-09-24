@@ -17,9 +17,16 @@ function extractMerchantNameHint(text) {
   ];
   for (const re of patterns) {
     const m = text.match(re);
-    if (m && m[1] && m[1].trim().length > 0) return m[1].trim().replace(/[.!?]+$/, "");
+    const hint = m && m[1] ? cleanNameHint(m[1]) : "";
+    if (hint.length > 0) return hint;
   }
   return null;
+}
+
+// Drops brackets, quotes and end punctuation around a typed name, e.g. the
+// "[ XEM <TÊN QUÁN> ]" call to action copied back from a search reply.
+function cleanNameHint(text) {
+  return text.replace(/^[\s[\]()"'“”‘’]+/, "").replace(/[\s[\]()"'“”‘’.!?]+$/, "");
 }
 
 /**

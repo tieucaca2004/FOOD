@@ -1,4 +1,10 @@
 import { isDiscoverable, deriveAccountFieldsFromLegacyStatus } from "../domain/merchantStatus.js";
+import { stripAccents } from "../../src/nlp/normalize.js"; // generic, read-only reuse (same folding dish search uses)
+
+// Case- and accent-insensitive form of a merchant name or typed fragment.
+function foldName(text) {
+  return stripAccents(text.normalize("NFC")).replace(/\s+/g, " ").trim();
+}
 
 export class MerchantRepository {
   constructor(db) {
@@ -23,11 +29,14 @@ export class MerchantRepository {
     return this.listAll().filter((m) => isDiscoverable(m.status));
   }
 
-  // The fragment is matched literally: LIKE wildcards typed by a user
-  // (% and _) are escaped rather than interpreted.
+  // Substring match that ignores letter case and Vietnamese diacritics, the
+  // same way dish search matches product names. SQLite's NOCASE folds ASCII
+  // only, so "HỦ TIẾU" never matched "Hủ Tiếu"; matching happens here
+  // instead. The fragment is literal: %, _ and \ are not wildcards.
   findByNameFragment(text) {
-    const escaped = text.trim().replace(/[\\%_]/g, (c) => `\\${c}`);
-    return this.db.prepare(`SELECT * FROM merchants WHERE name LIKE ? COLLATE NOCASE ESCAPE '\\'`).all(`%${escaped}%`);
+    const fragment = foldName(text);
+    if (fragment === "") return [];
+    return this.listAll().filter((m) => foldName(m.name).includes(fragment));
   }
 
   create(merchant) {

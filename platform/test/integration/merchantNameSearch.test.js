@@ -39,3 +39,12 @@ test("EDGE-002: discovery's name lookup inherits the literal matching", () => {
   const { platform } = setup();
   assert.deepEqual(platform.discovery.searchByMerchantName("%").map((m) => m.merchant_id), ["PCT001"]);
 });
+
+test("name search folds case and diacritics but stays literal, and a blank fragment matches nothing", () => {
+  const { names } = setup();
+  assert.deepEqual(names("QUÁN 100%"), ["Quán 100% Ngon"]);
+  assert.deepEqual(names("quan a_b"), ["Quán A_B"]);
+  assert.deepEqual(names("QUAN C\\D"), ["Quán C\\D"]);
+  assert.deepEqual(names("quan a%b"), []);
+  assert.deepEqual(names("   "), []);
+});
