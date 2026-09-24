@@ -32,6 +32,10 @@ export const TEST_ADMIN_TOKEN = "test-only-admin-token-" + "0".repeat(40);
 export const ADMIN_AUTH_HEADER = { authorization: `Bearer ${TEST_ADMIN_TOKEN}` };
 platformConfig.adminApiToken = TEST_ADMIN_TOKEN;
 
+// Zalo fixtures in the suites are unsigned; the signature tests turn the
+// check back on explicitly.
+platformConfig.enableZaloSignatureCheck = false;
+
 const FREE_PLAN = { plan_id: "free", name: "Free", price: 0, trial_days: null };
 
 // TEST-ONLY generic merchant fixtures — never present in production seed

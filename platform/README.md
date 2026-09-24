@@ -174,7 +174,11 @@ bằng structured template thật một khi đã xác minh API, không cần đ�
 DiscoveryEngine/PlatformRouter.
 
 Webhook signature (`PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK`) — cùng tình
-trạng best-effort/chưa xác minh như A Tiểu, mặc định tắt.
+trạng best-effort/chưa xác minh như A Tiểu, nhưng **mặc định BẬT (fail
+closed)**: chỉ tắt khi đặt đúng `false`. Khi bật mà thiếu
+`PLATFORM_ZALO_OA_SECRET_KEY` thì mọi request Zalo bị từ chối (401). Tắt
+nghĩa là bất kỳ ai gọi được webhook đều có thể gửi tin giả danh bất kỳ
+Zalo user nào — server log cảnh báo khi khởi động.
 
 ## 10. BLOCKED / chưa thể test với credential thật
 
