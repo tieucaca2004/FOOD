@@ -2,6 +2,8 @@ import { generateOrderCode } from "../domain/orderCode.js";
 import { CART_LIFECYCLE_STATUS } from "../domain/cartLifecycle.js";
 import { platformConfig } from "../config.js";
 
+export class OrderCodeConflictError extends Error {}
+
 // Orders for "generic" (data-driven) merchants — merchants with a custom
 // module (like A Tiểu) keep their own order-of-record in their own DB;
 // this table is never used for them. See platform/db/migrations/001_platform_init.sql.
@@ -93,7 +95,13 @@ export class PlatformOrderRepository {
     try {
       return tx();
     } catch (err) {
-      if (String(err.message).includes("UNIQUE")) return null; // an active (non-CANCELLED) order already exists for this cart
+      const message = String(err.message);
+      if (message.includes("UNIQUE constraint failed: orders.cart_id")) return null; // an active (non-CANCELLED) order already exists for this cart
+      if (message.includes("UNIQUE constraint failed: orders.order_code")) {
+        // Nothing was written (the transaction rolled back) and the cart is
+        // still ACTIVE, so the caller can safely retry.
+        throw new OrderCodeConflictError(`Generated order code collided with an existing order (cart ${cartId})`);
+      }
       throw err;
     }
   }

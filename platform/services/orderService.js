@@ -1,5 +1,6 @@
 import { ORDER_STATUS, assertTransition } from "../domain/orderStateMachine.js";
 import { isAccountDiscoverable } from "../domain/merchantStatus.js";
+import { OrderCodeConflictError } from "../repositories/orderRepository.js";
 
 /**
  * Generic Order + Dispatch Engine (Phase 6): the sole business authority
@@ -151,12 +152,20 @@ export class OrderService {
     // leaves the order created and the cart already CONVERTED. There is
     // no separate clearCart step and no window where the order exists
     // but the cart is still usable.
-    const order = this.repos.orders.createDraft({
-      merchantId: cart.merchant_id,
-      customerId,
-      cartId,
-      items: snapshotItems,
-    });
+    let order;
+    try {
+      order = this.repos.orders.createDraft({
+        merchantId: cart.merchant_id,
+        customerId,
+        cartId,
+        items: snapshotItems,
+      });
+    } catch (err) {
+      if (err instanceof OrderCodeConflictError) {
+        throw new OrderError("ORDER_CODE_CONFLICT", "Could not allocate an order code, please retry", 503);
+      }
+      throw err;
+    }
     if (!order) {
       throw new OrderError("ORDER_ALREADY_EXISTS_FOR_CART", `An order already exists for cart ${cartId}`, 409);
     }

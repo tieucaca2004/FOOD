@@ -35,24 +35,28 @@ export class MerchantService {
     if (this.repos.merchants.getById(merchantId)) {
       throw new MerchantOnboardingError("DUPLICATE_MERCHANT_ID", `merchant_id ${merchantId} already exists`);
     }
-    const merchant = this.repos.merchants.create({
-      merchantId,
-      name,
-      slug,
-      module,
-      status: MERCHANT_STATUS.PENDING,
-      description,
-      address,
-      phone,
-    });
-
     const plan = this.repos.subscriptions.getPlan(planId);
     if (!plan) throw new MerchantOnboardingError("PLAN_NOT_FOUND", `plan ${planId} not found`);
     const now = new Date();
     const trialEnd = computeTrialEnd(now, plan);
-    this.repos.subscriptions.startTrial(merchantId, planId, now.toISOString(), trialEnd.toISOString());
 
-    return merchant;
+    // Merchant row and its subscription commit together or not at all, so a
+    // failed onboarding never leaves an orphan merchant blocking a retry.
+    const onboardAtomically = this.repos.merchants.db.transaction(() => {
+      const merchant = this.repos.merchants.create({
+        merchantId,
+        name,
+        slug,
+        module,
+        status: MERCHANT_STATUS.PENDING,
+        description,
+        address,
+        phone,
+      });
+      this.repos.subscriptions.startTrial(merchantId, planId, now.toISOString(), trialEnd.toISOString());
+      return merchant;
+    });
+    return onboardAtomically();
   }
 
   // Admin review step — the only way a merchant becomes discoverable.

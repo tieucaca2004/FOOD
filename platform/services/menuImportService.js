@@ -235,10 +235,17 @@ export class MenuImportService {
     }
 
     // The only write path into published menu tables — MenuService owns
-    // the transaction and the publish itself (spec §20, never bypassed).
-    this.menuService.applyPublishedDraft(merchantId, record.draft);
-
-    const published = this.repos.menuImports.setStatus(importId, "PUBLISHED");
+    // the publish itself (spec §20, never bypassed). Applying the draft and
+    // marking the import PUBLISHED commit together: if either fails, neither
+    // happens, so a retry can never add the draft's products a second time.
+    const publish = this.repos.menuImports.db.transaction(() => {
+      if (this.repos.menuImports.getById(importId).status === "PUBLISHED") {
+        throw importError("ALREADY_PUBLISHED", `Import ${importId} was already published`, 409);
+      }
+      this.menuService.applyPublishedDraft(merchantId, record.draft);
+      return this.repos.menuImports.setStatus(importId, "PUBLISHED");
+    });
+    const published = publish();
     this._audit(merchantId, importId, "MENU_IMPORT_PUBLISHED", { sourceType: record.source_type });
     return published;
   }
