@@ -161,14 +161,14 @@ export function buildTestPlatform({
       available: true,
       keywords: ["hai san", "hu tieu hai san"],
     });
-    moduleFactories.generic = buildGenericAdapterFactory({ menuService: services.menu, merchantDataService: services.merchantData });
+    moduleFactories.generic = buildGenericAdapterFactory({ menuService: services.menu, merchantDataService: services.merchantData, cartService: services.cart, orderService: services.orders });
   }
 
   if (genericFixtureMerchants.length > 0) {
     for (const merchantId of genericFixtureMerchants) {
       registerGenericFixture(repos, merchantId);
     }
-    moduleFactories.generic = buildGenericAdapterFactory({ menuService: services.menu, merchantDataService: services.merchantData });
+    moduleFactories.generic = buildGenericAdapterFactory({ menuService: services.menu, merchantDataService: services.merchantData, cartService: services.cart, orderService: services.orders });
   }
 
   const registry = new MerchantRegistry({ repos, moduleFactories });

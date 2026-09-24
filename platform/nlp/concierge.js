@@ -73,7 +73,8 @@ export function classifyConciergeIntent(text) {
 
 const FILLER_PATTERNS = [
   // "tìm cho tôi …", "tìm giúp mình …", "kiếm …" — a request to search, not part of the dish name.
-  /^(tìm|kiếm)(\s+(cho|giúp|hộ))?(\s+(tôi|mình|em|anh|chị))?\s+/i,
+  // "tìm quán cà phê" searches for "cà phê": the dish/category follows "quán".
+  /^(tìm|kiếm)(\s+(cho|giúp|hộ))?(\s+(tôi|mình|em|anh|chị))?(\s+quán(?=\s+\S))?\s+/i,
   /^tôi muốn ăn\s+/i,
   /^mình muốn ăn\s+/i,
   /^cho (tôi|mình|em)\s+/i,

@@ -208,11 +208,14 @@ Zalo user nào — server log cảnh báo khi khởi động.
 - Gửi tin thật qua Zalo Send API của Tổng Đài OA — cần
   `PLATFORM_ZALO_OA_ACCESS_TOKEN` thật (khác token của A Tiểu).
 - Webhook signature verification thật.
-- Merchant "generic" (data-driven) hiện **chưa có chat-driven cart/order** —
-  `GenericMerchantAdapter.handleMessage()` chỉ trả lời xem menu, chưa đặt
-  món qua chat được (chỉ A Tiểu có full ordering engine). Cần một Generic
-  Order Engine riêng nếu muốn merchant tương lai không cần code riêng vẫn
-  đặt món được qua chat — hiện là follow-up, chưa implement.
+- Merchant "generic" đặt món qua chat (`GenericMerchantAdapter.handleMessage()`
+  + `platform/nlp/genericOrderIntent.js`, dùng CartService/OrderService có
+  sẵn): "xem menu", "cho tôi 2 <món>", "thêm 1 <món>", "xem giỏ hàng",
+  "xóa giỏ hàng", "đặt hàng". "đặt hàng" tạo đơn ngay (đúng hợp đồng
+  `confirmOrder(customerId, cartId)`, không có bước "xác nhận" riêng và chưa
+  có lệnh hủy đơn qua chat). Chưa có kênh đẩy đơn tới quán
+  (`NullMerchantDispatchPort`): đơn ở trạng thái CREATED cho tới khi quán lấy
+  qua merchant API (`/api/platform/merchant/orders`).
 - `MerchantModule.isOpenNow()` luôn trả `{known:false}` cho A Tiểu vì
   `opening_hours` trong seed A Tiểu là placeholder chưa xác nhận — Discovery
   không loại/không gắn nhãn "đang mở" cho tới khi có giờ mở cửa thật, có cấu
