@@ -18,6 +18,10 @@ import { platformConfig } from "../../config.js";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const TEST_SECRET = "test-telegram-secret-value";
 
+// platform/config.js loads a developer's .env, so without this the suite
+// would send real Bot API messages to the fake chat ids used below.
+platformConfig.telegramBotToken = "";
+
 function telegramUpdate({ userId, chatId, text, updateId, messageId, firstName = "Test", username }) {
   return {
     update_id: updateId,
@@ -593,6 +597,7 @@ async function startIsolatedTelegramServer() {
       F2_CONFIG_URL: pathToFileURL(path.join(REPO_ROOT, "platform/config.js")).href,
       F2_SECRET,
       F2_DB_ERROR,
+      PLATFORM_TELEGRAM_BOT_TOKEN: "",
     },
   });
   let stderr = "";
@@ -727,4 +732,145 @@ test("S. saveResponse() failure: the computed response is still returned, proces
   } finally {
     await srv.stop();
   }
+});
+
+// --- T. Outbound reply ------------------------------------------------------
+// Only api.telegram.org calls are intercepted; the test's own requests to the
+// local app go through the real fetch.
+
+const OUTBOUND_TOKEN = "123456:test-outbound-token";
+
+function telegramApiResponse(status, data) {
+  return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
+}
+
+async function withTelegramOutbound(respond, fn) {
+  const originalFetch = globalThis.fetch;
+  const originalToken = platformConfig.telegramBotToken;
+  const sent = [];
+  platformConfig.telegramBotToken = OUTBOUND_TOKEN;
+  globalThis.fetch = async (url, options) => {
+    if (String(url).startsWith("https://api.telegram.org/")) {
+      sent.push({ url: String(url), body: JSON.parse(options.body) });
+      return respond();
+    }
+    return originalFetch(url, options);
+  };
+  try {
+    return await withTelegramSecret(() => fn(sent));
+  } finally {
+    globalThis.fetch = originalFetch;
+    platformConfig.telegramBotToken = originalToken;
+  }
+}
+
+function countMessages(platform, userId) {
+  const customer = platform.repos.customers.findByZaloUserId(`telegram:${userId}`);
+  const rows = platform.db
+    .prepare("SELECT m.direction FROM platform_messages m JOIN platform_sessions s ON s.id = m.session_id WHERE s.customer_id = ?")
+    .all(customer.id);
+  return { in: rows.filter((r) => r.direction === "in").length, out: rows.filter((r) => r.direction === "out").length };
+}
+
+test("T. the router's reply is sent via sendMessage to the chat the update came from", async () => {
+  await withTelegramOutbound(
+    () => telegramApiResponse(200, { ok: true, result: { message_id: 9 } }),
+    async (sent) => {
+      const platform = buildTestPlatform({ withAtieu: false });
+      const server = await startServer(platform.app);
+      const originalHandle = platform.router.handle.bind(platform.router);
+      let routerReply = null;
+      platform.router.handle = async (args) => {
+        const result = await originalHandle(args);
+        routerReply = result.replyText;
+        return result;
+      };
+      try {
+        // A group chat: the destination must be the chat, not the sender.
+        const res = await postTelegramWebhook(server, telegramUpdate({ userId: 3101, chatId: -1001234567890, text: "Xin chào", updateId: 8001, messageId: 1 }));
+        assert.equal(res.status, 200);
+        assert.equal(res.body.status, "processed");
+        assert.equal(res.body.respond_error, null);
+        assert.ok(routerReply);
+
+        assert.equal(sent.length, 1);
+        assert.equal(sent[0].url, `https://api.telegram.org/bot${OUTBOUND_TOKEN}/sendMessage`);
+        assert.deepEqual(sent[0].body, { chat_id: "-1001234567890", text: routerReply });
+        assert.equal(res.body.reply_text, routerReply);
+      } finally {
+        platform.router.handle = originalHandle;
+        server.close();
+      }
+    }
+  );
+});
+
+test("T. a Telegram API rejection is reported in respond_error; the update still counts as processed and persisted", async () => {
+  await withTelegramOutbound(
+    () => telegramApiResponse(400, { ok: false, error_code: 400, description: "Bad Request: chat not found" }),
+    async (sent) => {
+      const platform = buildTestPlatform({ withAtieu: false });
+      const server = await startServer(platform.app);
+      try {
+        const res = await postTelegramWebhook(server, telegramUpdate({ userId: 3201, text: "Xin chào", updateId: 8101, messageId: 1 }));
+        assert.equal(res.status, 200);
+        assert.equal(res.body.status, "processed");
+        assert.equal(res.body.respond_error, "Bad Request: chat not found");
+        assert.equal(sent.length, 1);
+        assert.deepEqual(countMessages(platform, 3201), { in: 1, out: 1 });
+        assert.deepEqual(platform.repos.webhookEvents.getCachedResponse("telegram:8101"), res.body);
+
+        const next = await postTelegramWebhook(server, telegramUpdate({ userId: 3202, text: "Xin chào", updateId: 8102, messageId: 1 }));
+        assert.equal(next.status, 200);
+        assert.equal(next.body.status, "processed");
+      } finally {
+        server.close();
+      }
+    }
+  );
+});
+
+test("T. a network failure on send is reported without the bot token and without failing the webhook", async () => {
+  await withTelegramOutbound(
+    () => {
+      throw new TypeError(`fetch failed for https://api.telegram.org/bot${OUTBOUND_TOKEN}/sendMessage`);
+    },
+    async (sent) => {
+      const platform = buildTestPlatform({ withAtieu: false });
+      const server = await startServer(platform.app);
+      try {
+        const res = await postTelegramWebhook(server, telegramUpdate({ userId: 3301, text: "Xin chào", updateId: 8201, messageId: 1 }));
+        assert.equal(res.status, 200);
+        assert.equal(res.body.status, "processed");
+        assert.ok(res.body.respond_error);
+        assert.ok(!JSON.stringify(res.body).includes(OUTBOUND_TOKEN));
+        assert.equal(sent.length, 1);
+        assert.deepEqual(countMessages(platform, 3301), { in: 1, out: 1 });
+      } finally {
+        server.close();
+      }
+    }
+  );
+});
+
+test("T. a redelivered update returns the cached response and does not send the reply again", async () => {
+  await withTelegramOutbound(
+    () => telegramApiResponse(200, { ok: true, result: { message_id: 10 } }),
+    async (sent) => {
+      const platform = buildTestPlatform({ withAtieu: false });
+      const server = await startServer(platform.app);
+      try {
+        const update = telegramUpdate({ userId: 3401, text: "Xin chào", updateId: 8301, messageId: 1 });
+        const first = await postTelegramWebhook(server, update);
+        const second = await postTelegramWebhook(server, update);
+
+        assert.equal(first.body.status, "processed");
+        assert.deepEqual(second.body, first.body);
+        assert.equal(sent.length, 1);
+        assert.deepEqual(countMessages(platform, 3401), { in: 1, out: 1 });
+      } finally {
+        server.close();
+      }
+    }
+  );
 });

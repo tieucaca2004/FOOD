@@ -1,4 +1,5 @@
 import { normalizeTelegramUpdate } from "./telegram/normalizeTelegramUpdate.js";
+import { sendTelegramMessage } from "./telegram/telegramClient.js";
 import { logger } from "../../src/logger.js";
 
 // Namespace prefixes so this channel can never collide with Zalo's values
@@ -22,10 +23,10 @@ const DEDUPE_KEY_PREFIX = "telegram:";
  * AI Concierge, Discovery, Merchant/Menu/Cart/Order — no Telegram-specific
  * business logic exists anywhere past normalizeTelegramUpdate().
  *
- * OUTBOUND: deliberately not implemented (Part 8) — the reply is
- * computed and logged (repos.messages) exactly like Zalo's, but never
- * sent back to Telegram. A future phase adds a Telegram send client,
- * symmetric to platform/channel/zaloClient.js.
+ * OUTBOUND: the router's reply is sent back to the originating chat via
+ * telegram/telegramClient.js (symmetric to platform/channel/zaloClient.js).
+ * A failed send is reported in respond_error, never turned into an error
+ * response — the update was processed, so Telegram must not redeliver it.
  */
 export function createTelegramWebhookHandler({ repos, services, router }) {
   return async function handleTelegramWebhook(req, res) {
@@ -80,12 +81,17 @@ export function createTelegramWebhookHandler({ repos, services, router }) {
 
       repos.messages.log({ sessionId: session.id, direction: "out", rawText: result.replyText });
 
+      const sendResult = result.replyText
+        ? await sendTelegramMessage({ chatId: event.externalChatId, text: result.replyText })
+        : { ok: true };
+
       responsePayload = {
         status: "processed",
         channel: "telegram",
         customer_id: customer.id,
         session_id: result.session.id,
         reply_text: result.replyText,
+        respond_error: sendResult.ok ? null : sendResult.error,
       };
     } catch (err) {
       logger.error("WEBHOOK", "telegram processing failed", { requestId, updateId: event.updateId, error: err.message });
