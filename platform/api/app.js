@@ -23,6 +23,9 @@ function asyncHandler(handler) {
 export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router }) {
   const app = express();
   app.disable("x-powered-by");
+  // Which proxies may set the client IP the rate limiter keys on. Off unless
+  // PLATFORM_TRUST_PROXY names them (see platform/config.js).
+  app.set("trust proxy", platformConfig.trustProxy);
 
   // Before body parsing, so a request with a malformed body still gets a
   // request id and still counts against the rate limit.

@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const FAKE_ADMIN_TOKEN = "boot-test-admin-token-" + "c".repeat(40);
 
-async function bootServer(adminToken) {
+async function bootServer(adminToken, extraEnv = {}) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "platform-boot-"));
   const port = 40000 + Math.floor(Math.random() * 20000);
   const child = spawn(process.execPath, [path.join(REPO_ROOT, "platform/server.js")], {
@@ -33,6 +33,8 @@ async function bootServer(adminToken) {
       PLATFORM_AI_PROVIDER: "null",
       AI_PROVIDER: "null",
       LOG_LEVEL: "info",
+      PLATFORM_TRUST_PROXY: "",
+      ...extraEnv,
     },
   });
   let output = "";
@@ -94,6 +96,29 @@ test("booted with a token, the admin API accepts it and the token never appears 
     assert.doesNotMatch(server.output(), /PLATFORM_ADMIN_API_TOKEN is not set/);
     assert.ok(!server.output().includes(FAKE_ADMIN_TOKEN.slice(22)), "admin token leaked into server output");
     assert.ok(!server.output().includes("wrong-token-value"), "presented token leaked into server output");
+  } finally {
+    await server.stop();
+  }
+});
+
+test("booted with a PLATFORM_TRUST_PROXY that would trust any client, the server refuses it and says so", async () => {
+  const server = await bootServer(FAKE_ADMIN_TOKEN, { PLATFORM_TRUST_PROXY: "true" });
+  try {
+    assert.match(server.output(), /PLATFORM_TRUST_PROXY was refused/);
+    const statuses = [];
+    for (let i = 0; i < 3; i++) {
+      statuses.push((await fetch(server.url("/api/platform/health"), { headers: { "x-forwarded-for": `203.0.113.${i}` } })).status);
+    }
+    assert.deepEqual(statuses, [200, 200, 200]);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("booted with PLATFORM_TRUST_PROXY=loopback, there is no proxy warning", async () => {
+  const server = await bootServer(FAKE_ADMIN_TOKEN, { PLATFORM_TRUST_PROXY: "loopback" });
+  try {
+    assert.doesNotMatch(server.output(), /PLATFORM_TRUST_PROXY was refused|no trusted proxy/);
   } finally {
     await server.stop();
   }

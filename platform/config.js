@@ -1,4 +1,32 @@
 import "dotenv/config";
+import { isIP } from "node:net";
+
+const TRUST_PROXY_NAMES = new Set(["loopback", "linklocal", "uniquelocal"]);
+
+function isTrustableProxyEntry(entry) {
+  if (TRUST_PROXY_NAMES.has(entry)) return true;
+  const [address, prefix, ...rest] = entry.split("/");
+  const family = isIP(address);
+  if (!family || rest.length > 0) return false;
+  if (prefix === undefined) return true;
+  if (!/^\d+$/.test(prefix)) return false;
+  const bits = Number(prefix);
+  // A /0 subnet would trust every client's X-Forwarded-For.
+  return bits > 0 && bits <= (family === 4 ? 32 : 128);
+}
+
+// PLATFORM_TRUST_PROXY names the proxies whose X-Forwarded-For the rate
+// limiter may believe, as Express "trust proxy" addresses. Unset means none:
+// every client is identified by its own connection. Anything that would
+// trust arbitrary clients ("true", hop counts, "*", /0 subnets) or does not
+// parse is refused as a whole, never partly applied.
+export function parseTrustProxy(value) {
+  const raw = (value ?? "").trim().toLowerCase();
+  if (raw === "" || raw === "false") return false;
+  const entries = raw.split(",").map((e) => e.trim());
+  if (!entries.every(isTrustableProxyEntry)) return false;
+  return entries.join(",");
+}
 
 // Platform (Tổng Đài) config — fully separate from the A Tiểu merchant
 // module's src/config.js. Different OA, different DB, different port.
@@ -55,6 +83,10 @@ export const platformConfig = {
   // listing, onboarding, status changes, merchant API-key issuance). Unset
   // or shorter than 32 characters means the admin API refuses every request.
   adminApiToken: process.env.PLATFORM_ADMIN_API_TOKEN || "",
+
+  trustProxy: parseTrustProxy(process.env.PLATFORM_TRUST_PROXY),
+  // Set when PLATFORM_TRUST_PROXY was given but refused, for the startup warning.
+  trustProxyRejected: parseTrustProxy(process.env.PLATFORM_TRUST_PROXY) === false && !["", "false"].includes((process.env.PLATFORM_TRUST_PROXY ?? "").trim().toLowerCase()),
 
   rateLimitWindowMs: Number(process.env.PLATFORM_RATE_LIMIT_WINDOW_MS || 60_000),
   rateLimitMax: Number(process.env.PLATFORM_RATE_LIMIT_MAX || 60),

@@ -36,6 +36,10 @@ platformConfig.adminApiToken = TEST_ADMIN_TOKEN;
 // check back on explicitly.
 platformConfig.enableZaloSignatureCheck = false;
 
+// Deterministic client identity: a developer's PLATFORM_TRUST_PROXY must not
+// change which rate-limit bucket a test request lands in.
+platformConfig.trustProxy = false;
+
 const FREE_PLAN = { plan_id: "free", name: "Free", price: 0, trial_days: null };
 
 // TEST-ONLY generic merchant fixtures — never present in production seed

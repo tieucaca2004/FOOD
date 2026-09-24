@@ -66,6 +66,11 @@ const server = app.listen(platformConfig.port, () => {
   } else if (!platformConfig.zaloOaSecretKey) {
     logger.warn("APP", `PLATFORM_ZALO_OA_SECRET_KEY is not set: ${platformConfig.webhookPath} rejects every Zalo request`);
   }
+  if (platformConfig.trustProxyRejected) {
+    logger.warn("APP", "PLATFORM_TRUST_PROXY was refused (it would trust arbitrary clients or does not parse): no proxy is trusted");
+  } else if (!platformConfig.trustProxy) {
+    logger.info("APP", "no trusted proxy: behind a local tunnel every client shares one rate-limit bucket (see PLATFORM_TRUST_PROXY)");
+  }
   // Reports presence only; the token itself is never logged.
   if (!configuredAdminToken()) {
     logger.warn("APP", `PLATFORM_ADMIN_API_TOKEN is not set (or shorter than ${ADMIN_TOKEN_MIN_LENGTH} characters): the admin API /api/platform/merchants* refuses every request`);

@@ -152,6 +152,13 @@ POST   /platform/webhook
 POST   /api/platform/webhook/telegram
 ```
 
+Rate limit theo IP client. Mặc định không tin proxy nào
+(`PLATFORM_TRUST_PROXY` rỗng): đứng sau tunnel chạy trên cùng máy
+(cloudflared), mọi client đều hiện là 127.0.0.1 và dùng chung **một** bucket
+— kể cả webhook Telegram. Đặt `PLATFORM_TRUST_PROXY=loopback` chỉ khi đã xác
+nhận proxy local thêm IP thật của client vào CUỐI `X-Forwarded-For`; giá trị
+`true`, số hop, `*`, subnet `/0` bị từ chối (server log cảnh báo).
+
 Admin API **fail closed**: nếu `PLATFORM_ADMIN_API_TOKEN` chưa đặt hoặc ngắn
 hơn 32 ký tự, mọi request admin trả `503 admin_api_disabled`. Sai/thiếu
 token → `401 unauthenticated`. API key của merchant không dùng được cho
