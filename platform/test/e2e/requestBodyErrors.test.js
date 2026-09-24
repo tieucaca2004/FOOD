@@ -119,3 +119,28 @@ test("F-3 guard. unexpected internal errors still return 500 internal_error", as
     assert.deepEqual(res.body, { status: "error", error: "internal_error" });
   });
 });
+
+test("F-3b. a request with a malformed body still gets a request id", async () => {
+  await withServer(async ({ url }) => {
+    const res = await fetch(url("/api/platform/merchants"), { method: "POST", headers: { "content-type": "application/json" }, body: "{not json" });
+    assert.equal(res.status, 400);
+    assert.ok(res.headers.get("x-request-id"));
+  });
+});
+
+test("F-3b. malformed-body requests count against the rate limit", async () => {
+  const original = platformConfig.rateLimitMax;
+  platformConfig.rateLimitMax = 3;
+  try {
+    await withServer(async ({ url }) => {
+      const statuses = [];
+      for (let i = 0; i < 5; i++) {
+        const res = await fetch(url("/api/platform/merchants"), { method: "POST", headers: { "content-type": "application/json" }, body: "{not json" });
+        statuses.push(res.status);
+      }
+      assert.deepEqual(statuses, [400, 400, 400, 429, 429]);
+    });
+  } finally {
+    platformConfig.rateLimitMax = original;
+  }
+});

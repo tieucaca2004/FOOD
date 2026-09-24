@@ -1,3 +1,5 @@
+import { logger } from "../../src/logger.js";
+
 // Channel-agnostic funnel analytics, recorded from a PlatformRouter result.
 // Shared by every inbound channel adapter (Zalo, Telegram).
 
@@ -7,7 +9,17 @@ const INTENT_TO_EVENT = {
   confirm_order: "ORDER_CREATED",
 };
 
+// Observational only: by the time this runs the router may already have
+// placed an order, so a failure is logged and never propagated to the caller.
 export function logFunnelEvents(repos, customer, result) {
+  try {
+    recordFunnelEvents(repos, customer, result);
+  } catch (err) {
+    logger.error("ANALYTICS", "funnel analytics failed", { customerId: customer.id, error: err.message });
+  }
+}
+
+function recordFunnelEvents(repos, customer, result) {
   if (typeof result.searchResultCount === "number") {
     repos.analytics.logSearch({ customerId: customer.id, queryText: result.session.last_search_query, resultCount: result.searchResultCount });
     repos.analytics.logMerchantEvent({ merchantId: null, customerId: customer.id, eventType: "SEARCH", payload: { resultCount: result.searchResultCount } });

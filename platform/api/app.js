@@ -14,10 +14,20 @@ import { sanitizeWebhookErrors } from "./middleware/sanitizeWebhookErrors.js";
 import { createTelegramWebhookHandler } from "../channel/telegramWebhookController.js";
 import { telegramWebhookSecurity } from "./middleware/telegramWebhookSecurity.js";
 
+// Express 4 ignores a handler's returned promise; send a rejection to the
+// error handler instead of letting it crash the process.
+function asyncHandler(handler) {
+  return (req, res, next) => handler(req, res, next).catch(next);
+}
+
 export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router }) {
   const app = express();
   app.disable("x-powered-by");
 
+  // Before body parsing, so a request with a malformed body still gets a
+  // request id and still counts against the rate limit.
+  app.use(requestId);
+  app.use(rateLimit({ windowMs: platformConfig.rateLimitWindowMs, max: platformConfig.rateLimitMax }));
   app.use(
     express.json({
       limit: "1mb",
@@ -26,8 +36,6 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
       },
     })
   );
-  app.use(requestId);
-  app.use(rateLimit({ windowMs: platformConfig.rateLimitWindowMs, max: platformConfig.rateLimitMax }));
 
   app.use("/api/platform", healthRoutes(db));
   app.use("/api/platform", merchantRoutes({ services, repos, registry }));
@@ -35,12 +43,17 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
   app.use("/api/platform", merchantOrderRoutes({ merchantOrderService: services.merchantOrders, merchantAuthService: services.merchantAuth }));
   app.use("/api/platform", searchRoutes(discovery));
 
-  app.post(platformConfig.webhookPath, zaloWebhookSecurity, sanitizeWebhookErrors, createPlatformWebhookHandler({ repos, services, router }));
+  app.post(
+    platformConfig.webhookPath,
+    zaloWebhookSecurity,
+    sanitizeWebhookErrors,
+    asyncHandler(createPlatformWebhookHandler({ repos, services, router }))
+  );
   app.post(
     platformConfig.telegramWebhookPath,
     telegramWebhookSecurity,
     sanitizeWebhookErrors,
-    createTelegramWebhookHandler({ repos, services, router })
+    asyncHandler(createTelegramWebhookHandler({ repos, services, router }))
   );
 
   app.use(platformNotFound);
