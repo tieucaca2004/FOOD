@@ -1,5 +1,5 @@
 import { MERCHANT_STATUS } from "../domain/merchantStatus.js";
-import { computeTrialEnd } from "../domain/subscription.js";
+import { computeTrialEnd, isSubscriptionExpired } from "../domain/subscription.js";
 
 export class MerchantOnboardingError extends Error {
   constructor(code, message) {
@@ -9,8 +9,9 @@ export class MerchantOnboardingError extends Error {
 }
 
 export class MerchantService {
-  constructor(repos) {
+  constructor(repos, { subscriptions } = {}) {
     this.repos = repos;
+    this.subscriptions = subscriptions;
   }
 
   getById(merchantId) {
@@ -59,11 +60,20 @@ export class MerchantService {
     return onboardAtomically();
   }
 
-  // Admin review step — the only way a merchant becomes discoverable.
+  // Admin review step — the only way a merchant becomes discoverable. It
+  // approves a pending merchant or resumes a suspended one; it never brings
+  // back an expired subscription (spec §20). That is renew() (spec §43),
+  // which requires billing confirmation.
   activate(merchantId) {
     const merchant = this.repos.merchants.getById(merchantId);
     if (!merchant) throw new MerchantOnboardingError("MERCHANT_NOT_FOUND", "merchant not found");
-    const subscription = this.repos.subscriptions.getActiveByMerchant(merchantId);
+    // expireIfNeeded() applies a lapsed end date first, exactly as a read would.
+    const subscription = this.subscriptions
+      ? this.subscriptions.expireIfNeeded(merchantId)
+      : this.repos.subscriptions.getActiveByMerchant(merchantId);
+    if (subscription && (subscription.status === "EXPIRED" || isSubscriptionExpired(subscription))) {
+      throw new MerchantOnboardingError("SUBSCRIPTION_EXPIRED", "subscription expired: renew it before activating the merchant");
+    }
     const newStatus = subscription?.status === "TRIAL" ? MERCHANT_STATUS.TRIAL : MERCHANT_STATUS.ACTIVE;
     return this.repos.merchants.setStatus(merchantId, newStatus);
   }

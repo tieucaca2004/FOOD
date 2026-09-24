@@ -116,6 +116,10 @@ PENDING → (admin activate) → ACTIVE | TRIAL → SUSPENDED/EXPIRED/CLOSED
 ```
 
 Chỉ `ACTIVE`/`TRIAL` được Discovery trả về (`platform/domain/merchantStatus.js`).
+`activate` chỉ duyệt merchant PENDING hoặc mở lại merchant bị SUSPENDED; nó
+**từ chối** (`400 SUBSCRIPTION_EXPIRED`) khi subscription đã hết hạn — đưa
+merchant hết hạn trở lại là việc của `renew()` (spec §43, cần xác nhận thanh
+toán; hiện chưa có endpoint).
 `trial_days` không hard-code — lấy từ `plans.trial_days`, fallback
 `DEFAULT_TRIAL_DAYS` env (`platform/domain/subscription.js`).
 

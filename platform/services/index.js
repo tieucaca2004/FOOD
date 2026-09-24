@@ -25,7 +25,7 @@ export function createPlatformServices(repos, { visionProvider, imageStorage, di
   const cart = new CartService(repos, menu, merchantData); // Generic Cart Engine (Phase 5) — generic merchants only, A Tiểu has its own
 
   return {
-    merchants: new MerchantService(repos), // write-side: onboarding/lifecycle actions
+    merchants: new MerchantService(repos, { subscriptions }), // write-side: onboarding/lifecycle actions
     merchantData,
     menu,
     menuImport: new MenuImportService({
