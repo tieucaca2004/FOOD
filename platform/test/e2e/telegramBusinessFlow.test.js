@@ -237,3 +237,41 @@ test("a funnel-analytics failure does not break the Telegram conversation", asyn
     }
   });
 });
+
+test("Telegram 'tìm cho tôi hủ tiếu xá xíu': no match on A Tiểu's real menu; found when a merchant's menu has the dish", async () => {
+  await withIsolatedTelegram(async (botApiCalls) => {
+    async function ask(platform, userId, updateId) {
+      const server = await startServer(platform.app);
+      try {
+        const res = await fetch(`${baseUrl(server)}${platformConfig.telegramWebhookPath}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": WEBHOOK_SECRET },
+          body: JSON.stringify(update({ userId, updateId, text: "tìm cho tôi hủ tiếu xá xíu" })),
+        });
+        return await res.json();
+      } finally {
+        server.close();
+      }
+    }
+
+    // A Tiểu alone: its authoritative menu has no xá xíu dish.
+    const atieuOnly = await ask(buildTestPlatform({ withAtieu: true }), 7301, 97001);
+    assert.equal(atieuOnly.status, "processed");
+    assert.match(atieuOnly.reply_text, /chưa tìm thấy quán nào phù hợp/);
+
+    // A merchant whose imported menu has the dish is found and returned to the customer.
+    const platform = buildTestPlatform({ withAtieu: true, genericFixtureMerchants: ["MERCHANT003"] });
+    const draft = platform.services.menuImport.importText("MERCHANT003", "Hủ Tiếu Xá Xíu 55k");
+    platform.services.menuImport.approveImport("MERCHANT003", draft.id);
+    platform.services.menuImport.publishImport("MERCHANT003", draft.id);
+    const found = await ask(platform, 7302, 97002);
+    assert.equal(found.status, "processed");
+    assert.match(found.reply_text, /Hủ Tiếu Xá Xíu/);
+    assert.equal(botApiCalls.at(-1).body.chat_id, "7302");
+    assert.equal(botApiCalls.at(-1).body.text, found.reply_text);
+    const customer = platform.repos.customers.findByZaloUserId("telegram:7302");
+    assert.deepEqual(platform.db.prepare("SELECT query_text, result_count FROM search_events WHERE customer_id = ?").all(customer.id), [
+      { query_text: "hủ tiếu xá xíu", result_count: 1 },
+    ]);
+  });
+});

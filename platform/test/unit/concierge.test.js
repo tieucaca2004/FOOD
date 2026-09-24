@@ -12,6 +12,29 @@ test("the chat-app /start command is a greeting, with or without a bot mention o
   }
 });
 
+test("a 'tìm/kiếm (cho|giúp) <pronoun>' request prefix is not part of the dish being searched", () => {
+  const cases = {
+    "tìm cho tôi hủ tiếu xá xíu": "hủ tiếu xá xíu",
+    "tìm hủ tiếu xá xíu": "hủ tiếu xá xíu",
+    "Tìm giúp mình hủ tiếu xào bò": "hủ tiếu xào bò",
+    "kiếm cho em hủ tiếu xào": "hủ tiếu xào",
+    "hủ tiếu xá xíu": "hủ tiếu xá xíu",
+  };
+  for (const [text, keywords] of Object.entries(cases)) {
+    const r = classifyConciergeIntent(text);
+    assert.equal(r.intent, "search_food", text);
+    assert.equal(r.searchKeywords, keywords, text);
+  }
+});
+
+test("decomposed (NFD) Vietnamese is classified exactly like precomposed text", () => {
+  for (const text of ["Xin chào", "Tôi muốn ăn hủ tiếu xào", "tìm cho tôi hủ tiếu xá xíu", "tìm quán khác", "Xem A Tiểu"]) {
+    const nfd = classifyConciergeIntent(text.normalize("NFD"));
+    const nfc = classifyConciergeIntent(text.normalize("NFC"));
+    assert.deepEqual(nfd, nfc, text);
+  }
+});
+
 test("text that merely resembles /start is not treated as the command", () => {
   const r = classifyConciergeIntent("/started hủ tiếu");
   assert.notEqual(r.intent, "greeting");

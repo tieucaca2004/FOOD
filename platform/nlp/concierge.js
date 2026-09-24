@@ -26,7 +26,9 @@ function extractMerchantNameHint(text) {
  * @returns {{intent: string, merchantNameHint: string|null, searchKeywords: string|null}}
  */
 export function classifyConciergeIntent(text) {
-  const raw = (text || "").trim();
+  // Some keyboards send Vietnamese decomposed (NFD); every pattern here is
+  // written precomposed, so compare in NFC.
+  const raw = (text || "").normalize("NFC").trim();
   const lower = raw.toLowerCase();
 
   if (GREETING.test(lower) || START_COMMAND.test(lower)) return { intent: "greeting", merchantNameHint: null, searchKeywords: null };
@@ -51,6 +53,8 @@ export function classifyConciergeIntent(text) {
 }
 
 const FILLER_PATTERNS = [
+  // "tìm cho tôi …", "tìm giúp mình …", "kiếm …" — a request to search, not part of the dish name.
+  /^(tìm|kiếm)(\s+(cho|giúp|hộ))?(\s+(tôi|mình|em|anh|chị))?\s+/i,
   /^tôi muốn ăn\s+/i,
   /^mình muốn ăn\s+/i,
   /^cho (tôi|mình|em)\s+/i,
