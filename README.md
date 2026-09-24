@@ -243,6 +243,10 @@ Image tự chạy `migrate` + `seed` (idempotent) trước khi start server. N�
 `better-sqlite3` build native fail trên máy bạn (thiếu prebuilt binary cho
 kiến trúc lạ), cài `build-essential python3` trước `npm ci`.
 
+Không dùng Docker (chạy `npm start` trên Windows): server cũng lắng nghe
+trên mọi interface — chặn inbound port 3900 bằng Windows Firewall (lệnh
+`New-NetFirewallRule` trong `platform/README.md`, mục REST API).
+
 Graceful shutdown: `SIGTERM`/`SIGINT` đóng HTTP server + DB connection trước
 khi exit (`src/server.js`).
 

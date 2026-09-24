@@ -166,6 +166,37 @@ Rate limit theo IP client. Mặc định không tin proxy nào
 nhận proxy local thêm IP thật của client vào CUỐI `X-Forwarded-For`; giá trị
 `true`, số hop, `*`, subnet `/0` bị từ chối (server log cảnh báo).
 
+**Kiểm tra trước khi đặt `PLATFORM_TRUST_PROXY=loopback`** (không đụng tới
+tunnel/webhook Telegram đang chạy):
+
+1. Trên máy chạy FOOD, bật một server echo tạm trên port khác:
+   `node -e "require('http').createServer((q,s)=>{s.setHeader('content-type','application/json');s.end(JSON.stringify({peer:q.socket.remoteAddress,xff:q.headers['x-forwarded-for']||null}))}).listen(3999,'127.0.0.1')"`
+2. Mở một Quick Tunnel **thứ hai** tới nó: `cloudflared tunnel --url http://127.0.0.1:3999`.
+3. Từ một mạng khác (VD điện thoại 4G), gọi URL tunnel mới hai lần:
+   `curl https://<url-mới>/` và `curl -H "X-Forwarded-For: 1.2.3.4" https://<url-mới>/`.
+4. Chỉ bật `loopback` nếu CẢ HAI lần đều có: `peer` là `127.0.0.1`, `::1`
+   hoặc `::ffff:127.0.0.1`, **và** phần tử CUỐI của `xff` là IP public thật
+   của máy gọi (không phải `1.2.3.4`). Nếu `xff` rỗng, hoặc chỉ là
+   `1.2.3.4`, hoặc IP cuối không phải của bạn → **không** bật.
+5. Tắt server echo và tunnel thứ hai.
+
+Cloudflare Quick Tunnel đổi URL mỗi lần tạo lại; kết quả kiểm tra phải làm
+lại nếu đổi loại tunnel/proxy (VD thêm nginx phía trước).
+
+**Chặn truy cập LAN (Windows).** Platform (3901) và A Tiểu độc lập (3900)
+lắng nghe trên mọi interface. cloudflared chạy cùng máy kết nối qua
+loopback, nên có thể chặn inbound từ mạng ngoài mà tunnel vẫn chạy
+(PowerShell quyền Administrator):
+
+```powershell
+New-NetFirewallRule -DisplayName "FOOD block inbound 3900" -Direction Inbound -Protocol TCP -LocalPort 3900 -Action Block
+New-NetFirewallRule -DisplayName "FOOD block inbound 3901" -Direction Inbound -Protocol TCP -LocalPort 3901 -Action Block
+```
+
+Kiểm tra sau khi thêm: webhook Telegram vẫn trả lời qua tunnel, và từ một
+máy khác trong LAN `http://<IP-máy-FOOD>:3901/api/platform/health` không
+kết nối được.
+
 Admin API **fail closed**: nếu `PLATFORM_ADMIN_API_TOKEN` chưa đặt hoặc ngắn
 hơn 32 ký tự, mọi request admin trả `503 admin_api_disabled`. Sai/thiếu
 token → `401 unauthenticated`. API key của merchant không dùng được cho
