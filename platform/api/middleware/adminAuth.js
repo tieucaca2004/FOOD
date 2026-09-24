@@ -13,11 +13,24 @@ function digest(value) {
   return createHash("sha256").update(value, "utf8").digest();
 }
 
-// The configured admin token, or null when it is missing or too weak to use.
-export function configuredAdminToken() {
+// Other credentials the admin token must never equal. The Telegram webhook
+// secret in particular travels in every webhook request.
+const OTHER_SECRETS = ["telegramWebhookSecret", "telegramBotToken", "zaloAccessToken", "zaloOaSecretKey", "anthropicApiKey"];
+
+// Why the configured admin token cannot be used, or null when it can. The
+// reasons name the problem, never the value.
+export function adminTokenProblem() {
   const token = platformConfig.adminApiToken;
-  if (typeof token !== "string" || token.trim().length < ADMIN_TOKEN_MIN_LENGTH) return null;
-  return token;
+  if (typeof token !== "string" || token.trim() === "") return "is not set";
+  if (token.trim().length < ADMIN_TOKEN_MIN_LENGTH) return `is shorter than ${ADMIN_TOKEN_MIN_LENGTH} characters`;
+  if (/[\s,]/.test(token)) return "contains whitespace or commas, which a Bearer header cannot carry";
+  if (OTHER_SECRETS.some((field) => platformConfig[field] && platformConfig[field] === token)) return "reuses another configured credential";
+  return null;
+}
+
+// The configured admin token, or null when it is missing or unusable.
+export function configuredAdminToken() {
+  return adminTokenProblem() ? null : platformConfig.adminApiToken;
 }
 
 function reject(req, res, status, error, reason) {

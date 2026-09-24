@@ -11,7 +11,7 @@ import { DiscoveryEngine } from "./discovery/DiscoveryEngine.js";
 import { AgentSearchService } from "./services/agentSearchService.js";
 import { PlatformRouter } from "./router/PlatformRouter.js";
 import { createPlatformApp } from "./api/app.js";
-import { configuredAdminToken, ADMIN_TOKEN_MIN_LENGTH } from "./api/middleware/adminAuth.js";
+import { adminTokenProblem } from "./api/middleware/adminAuth.js";
 
 // A Tiểu's own engine, imported UNCHANGED — this is the "Merchant Matrix"
 // running in-process, exactly as it does standalone via src/server.js. The
@@ -71,9 +71,10 @@ const server = app.listen(platformConfig.port, () => {
   } else if (!platformConfig.trustProxy) {
     logger.info("APP", "no trusted proxy: behind a local tunnel every client shares one rate-limit bucket (see PLATFORM_TRUST_PROXY)");
   }
-  // Reports presence only; the token itself is never logged.
-  if (!configuredAdminToken()) {
-    logger.warn("APP", `PLATFORM_ADMIN_API_TOKEN is not set (or shorter than ${ADMIN_TOKEN_MIN_LENGTH} characters): the admin API /api/platform/merchants* refuses every request`);
+  // Names the problem only; the token itself is never logged.
+  const adminProblem = adminTokenProblem();
+  if (adminProblem) {
+    logger.warn("APP", `PLATFORM_ADMIN_API_TOKEN ${adminProblem}: the admin API /api/platform/merchants* refuses every request`);
   }
 });
 

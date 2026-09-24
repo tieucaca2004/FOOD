@@ -300,3 +300,32 @@ test("an admin-issued API key works on the merchant routes and only for that mer
     assert.equal(orders.status, 200);
   });
 });
+
+test("a configured admin token containing whitespace or commas (which no Bearer header can carry) is treated as not configured", async () => {
+  for (const token of ["correct horse battery staple admin token", "admin-token-part-one,admin-token-part-two"]) {
+    await withServer({ adminToken: token }, async ({ url }) => {
+      const res = await call(url("/api/platform/merchants"), { authorization: bearer(token) });
+      assert.equal(res.status, 503, `${JSON.stringify(token)} -> ${res.status}`);
+      assert.deepEqual(res.body, DISABLED);
+    });
+  }
+});
+
+test("an admin token that reuses another configured credential is refused", async () => {
+  const fields = ["telegramWebhookSecret", "telegramBotToken", "zaloAccessToken", "zaloOaSecretKey", "anthropicApiKey"];
+  for (const field of fields) {
+    const saved = platformConfig[field];
+    platformConfig[field] = ADMIN_TOKEN;
+    try {
+      await withServer({}, async ({ platform, url }) => {
+        const before = snapshot(platform);
+        const res = await call(url("/api/platform/merchants/MERCHANT002/status"), { method: "PATCH", body: { action: "suspend" }, authorization: bearer(ADMIN_TOKEN) });
+        assert.equal(res.status, 503, `${field} -> ${res.status}`);
+        assert.deepEqual(res.body, DISABLED);
+        assert.deepEqual(snapshot(platform), before);
+      });
+    } finally {
+      platformConfig[field] = saved;
+    }
+  }
+});

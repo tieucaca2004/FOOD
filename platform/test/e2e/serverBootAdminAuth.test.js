@@ -93,7 +93,7 @@ test("booted with a token, the admin API accepts it and the token never appears 
     const body = await list.json();
     assert.ok(body.merchants.some((m) => m.merchant_id === "ATIEU001"));
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.doesNotMatch(server.output(), /PLATFORM_ADMIN_API_TOKEN is not set/);
+    assert.doesNotMatch(server.output(), /PLATFORM_ADMIN_API_TOKEN .*refuses every request/);
     assert.ok(!server.output().includes(FAKE_ADMIN_TOKEN.slice(22)), "admin token leaked into server output");
     assert.ok(!server.output().includes("wrong-token-value"), "presented token leaked into server output");
   } finally {
