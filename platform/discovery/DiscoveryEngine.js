@@ -1,11 +1,5 @@
 import { rankMerchantResults } from "../domain/ranking.js";
-import { stripAccents } from "../../src/nlp/normalize.js";
-
-function normalizeName(text) {
-  return stripAccents(text || "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
+import { normalizeSearchQuery, matchesMerchantName } from "../nlp/searchQuery.js";
 
 /**
  * USER QUERY -> (NLP already done by caller) -> structured keywords ->
@@ -17,9 +11,14 @@ function normalizeName(text) {
  * MerchantRepository directly. This changes only WHERE the discoverability
  * check reads from, not what it decides — MerchantRepository.setStatus()
  * dual-writes both models, so every merchant already in the DB agrees
- * under either path. Ranking behavior, matching, and the
- * organic/sponsored split are all untouched (see domain/ranking.js, not
- * modified in this phase).
+ * under either path.
+ *
+ * Search matches a merchant two ways, both generic (no per-merchant rule):
+ * - by product, through each merchant's own adapter.searchProducts();
+ * - by merchant name/slug, accent- and case-insensitively
+ *   (searchQuery.matchesMerchantName).
+ * A merchant matched by name is flagged `merchantNameMatch` and ranks above
+ * product-only matches (domain/ranking.js); organic/sponsored stay separate.
  */
 export class DiscoveryEngine {
   constructor(merchantDataService, registry) {
@@ -31,25 +30,34 @@ export class DiscoveryEngine {
    * @returns {{organic: Array<{merchant, matches}>, sponsored: Array}}
    */
   async searchByKeywords(keywords) {
+    // Idempotent on already-normalized keywords (the concierge path), and
+    // makes direct callers (GET /api/platform/search?q=tìm pizza) behave the same.
+    const query = normalizeSearchQuery(keywords);
+    if (!query.text) return rankMerchantResults([]);
+
     const discoverable = this.merchantDataService.listDiscoverable();
     const candidates = [];
 
     for (const merchant of discoverable) {
+      const merchantNameMatch = matchesMerchantName(merchant, query.normalized);
       const adapter = this.registry.getAdapter(merchant.merchant_id);
-      if (!adapter) continue;
-      const matches = await adapter.searchProducts(keywords);
-      if (matches.length === 0) continue;
+      const matches = adapter ? await adapter.searchProducts(query.text) : [];
+      if (matches.length === 0 && !merchantNameMatch) continue;
 
-      const bestQuality = matches.some((m) => m.matchQuality === "exact")
-        ? "exact"
-        : matches.some((m) => m.matchQuality === "keyword")
-        ? "keyword"
-        : "category";
+      const bestQuality =
+        matches.length === 0
+          ? "merchant_name"
+          : matches.some((m) => m.matchQuality === "exact")
+          ? "exact"
+          : matches.some((m) => m.matchQuality === "keyword")
+          ? "keyword"
+          : "category";
 
       candidates.push({
         merchant,
         matches,
         matchQuality: bestQuality,
+        merchantNameMatch,
         hasAvailableMatch: matches.some((m) => m.available),
         merchantStatus: merchant.status,
       });
@@ -58,23 +66,32 @@ export class DiscoveryEngine {
     return rankMerchantResults(candidates);
   }
 
+  // Discoverable merchants whose name contains the fragment (SQL LIKE, as
+  // before) plus accent-insensitive name/slug matches ("nom nom" finds
+  // "Nôm Nôm") — a superset of the previous result, never fewer.
   searchByMerchantName(nameFragment) {
-    return this.merchantDataService.findDiscoverableByNameFragment(nameFragment);
-  }
-
-  // Accent/case-insensitive shop-name match over discoverable merchants
-  // only ("nom nom restaurant" finds "[DEMO] Nôm Nôm Restaurant"). Used by
-  // PlatformRouter as a fallback when a free-text search matched no dish.
-  searchByMerchantNameLoose(text) {
-    const wanted = normalizeName(text);
-    if (wanted.length < 3) return [];
-    return this.merchantDataService.listDiscoverable().filter((m) => normalizeName(m.name).includes(wanted));
+    return this._withLooseNameMatches(
+      this.merchantDataService.findDiscoverableByNameFragment(nameFragment),
+      this.merchantDataService.listDiscoverable(),
+      nameFragment
+    );
   }
 
   // Any-status lookup — used by PlatformRouter to tell "no such merchant"
   // apart from "merchant exists but isn't currently discoverable" so it
   // can reply "quán này hiện không khả dụng" instead of "không tìm thấy".
   searchByMerchantNameAnyStatus(nameFragment) {
-    return this.merchantDataService.findAnyStatusByNameFragment(nameFragment);
+    return this._withLooseNameMatches(
+      this.merchantDataService.findAnyStatusByNameFragment(nameFragment),
+      this.merchantDataService.listAll(),
+      nameFragment
+    );
+  }
+
+  _withLooseNameMatches(exactMatches, pool, nameFragment) {
+    const { normalized } = normalizeSearchQuery(nameFragment);
+    const seen = new Set(exactMatches.map((m) => m.merchant_id));
+    const extra = pool.filter((m) => !seen.has(m.merchant_id) && matchesMerchantName(m, normalized));
+    return [...exactMatches, ...extra];
   }
 }

@@ -1,4 +1,5 @@
 import { classifyConciergeIntent } from "../nlp/concierge.js";
+import { classifyMerchantFollowUp, parseProductQuestion } from "../nlp/merchantFollowUp.js";
 
 function formatMerchantCard({ merchant, matches }) {
   const itemLines = matches
@@ -101,12 +102,30 @@ export class PlatformRouter {
       if (anyStatusMatches.length > 0) {
         return { replyText: `Dạ ${anyStatusMatches[0].name} hiện không khả dụng, anh/chị tìm quán khác giúp em nha.`, session };
       }
+      // No merchant by that name ("xem thực đơn") — maybe a follow-up below.
+    }
+
+    // "chọn 2" / "2" right after a result list.
+    const pickedByNumber = this._pickFromLastResults(session, text);
+    if (pickedByNumber) return this._openMerchant(customer, session, pickedByNumber, { entrySource: "search_pick" });
+
+    // Follow-up about the merchant the customer just found ("có menu quán
+    // ko", "quán ở đâu", "cho tôi 2 …") — answered with that merchant, never
+    // by re-running a marketplace-wide search.
+    const followUp = classifyMerchantFollowUp(text);
+    if (followUp) {
+      const handled = await this._handleFollowUp(customer, session, text, followUp);
+      if (handled) return handled;
+    }
+
+    if (concierge.intent === "open_merchant_by_name") {
       // No merchant by that name at all — fall back to treating it as a product/category search.
       return this._runSearch(customer, session, concierge.merchantNameHint);
     }
 
     if (concierge.intent === "search_food") {
-      return this._runSearch(customer, session, concierge.searchKeywords);
+      // "có Seafood Pizza không" with no merchant context: search the dish itself.
+      return this._runSearch(customer, session, parseProductQuestion(text) ?? concierge.searchKeywords);
     }
 
     if (concierge.intent === "global_search") {
@@ -128,19 +147,96 @@ export class PlatformRouter {
   }
 
   async _runSearch(customer, session, keywords) {
-    let { organic, sponsored } = await this.agentSearch.searchMerchants(keywords);
-    if (organic.length === 0 && sponsored.length === 0) {
-      // No dish matched — the text may be a shop name ("Nôm Nôm Restaurant").
-      // Dish results are never mixed with or re-ranked by this fallback.
-      const byName = this.discovery.searchByMerchantNameLoose(keywords).map((merchant) => ({ merchant, matches: [] }));
-      organic = byName.filter((c) => !c.merchant.sponsored);
-      sponsored = byName.filter((c) => c.merchant.sponsored);
-    }
+    const { organic, sponsored } = await this.agentSearch.searchMerchants(keywords);
+    const found = [...organic, ...sponsored];
+    // The query is always recorded (search analytics read it), but an empty
+    // result keeps the previous results as the conversation context: a
+    // misunderstood follow-up must not erase the merchant just found.
     const updated = this.services.sessions.update(session.id, {
       lastSearchQuery: keywords,
-      lastSearchResults: [...organic, ...sponsored].map((c) => ({ merchant_id: c.merchant.merchant_id, name: c.merchant.name })),
+      ...(found.length > 0 && {
+        lastSearchResults: found.map((c) => ({
+          merchant_id: c.merchant.merchant_id,
+          name: c.merchant.name,
+          name_match: Boolean(c.merchantNameMatch),
+        })),
+      }),
     });
-    return { replyText: formatSearchResults({ organic, sponsored }), session: updated, searchResultCount: organic.length + sponsored.length };
+    return { replyText: formatSearchResults({ organic, sponsored }), session: updated, searchResultCount: found.length };
+  }
+
+  // The merchant a follow-up refers to, from the last search:
+  // - exactly one result -> that merchant;
+  // - several, but exactly one matched by its own name ("Tìm hủ tiếu xào"
+  //   names "Hủ Tiếu Xào A Tiểu") -> that one;
+  // - otherwise ambiguous -> the customer must choose. Never guessed.
+  _recentMerchant(session) {
+    const results = session.lastSearchResults || [];
+    if (results.length === 0) return { merchantId: null, candidates: [] };
+    if (results.length === 1) return { merchantId: results[0].merchant_id, candidates: results };
+    const named = results.filter((r) => r.name_match);
+    return { merchantId: named.length === 1 ? named[0].merchant_id : null, candidates: results };
+  }
+
+  _pickFromLastResults(session, text) {
+    const m = String(text || "").trim().toLowerCase().match(/^(?:(?:chọn|chon|xem|mở|mo|quán|quan|số|so)\s+)*(\d{1,2})$/);
+    const results = session.lastSearchResults || [];
+    if (!m || results.length < 2) return null;
+    const picked = results[Number(m[1]) - 1];
+    return picked ? this.services.merchantData.getById(picked.merchant_id) : null;
+  }
+
+  async _handleFollowUp(customer, session, text, followUp) {
+    // The follow-up may itself name a merchant ("menu nom nom") — that wins.
+    let merchant = null;
+    if (followUp.rest.length >= 3) {
+      const named = this.discovery.searchByMerchantName(followUp.rest);
+      if (named.length === 1) merchant = named[0];
+    }
+    if (!merchant) {
+      const { merchantId, candidates } = this._recentMerchant(session);
+      if (!merchantId) {
+        if (candidates.length < 2) return null; // no context: normal handling
+        const list = candidates.map((c, i) => `${i + 1}. ${c.name}`).join("\n");
+        return {
+          replyText: `Dạ lần tìm trước có ${candidates.length} quán:\n${list}\n\nAnh/chị muốn hỏi quán nào ạ? (Gõ số thứ tự, VD: "1", hoặc "xem <tên quán>")`,
+          session,
+        };
+      }
+      merchant = this.services.merchantData.getById(merchantId);
+    }
+
+    if (!this.merchantRouter.isRoutable(merchant)) {
+      return { replyText: `Dạ ${merchant?.name ?? "quán này"} hiện không khả dụng, anh/chị tìm quán khác giúp em nha.`, session };
+    }
+    if (followUp.kind === "menu") {
+      return this._openMerchant(customer, session, merchant, { entrySource: "search_followup" });
+    }
+
+    const updated = this.services.sessions.enterMerchantContext(session.id, merchant.merchant_id, {
+      entrySource: "search_followup",
+      searchQuery: session.last_search_query,
+    });
+    if (followUp.kind === "location") {
+      const { name, address } = await this.merchantRouter.registry.getAdapter(merchant.merchant_id).getMenuSummary();
+      return {
+        replyText: address ? `📍 ${name}: ${address}` : `Dạ ${name} chưa cập nhật địa chỉ ạ.`,
+        session: updated,
+        activeMerchantId: merchant.merchant_id,
+      };
+    }
+    const result = await this.merchantRouter.routeMessage(merchant.merchant_id, customer.id, text);
+    if (!result.ok) {
+      const back = this.services.sessions.returnToPlatform(session.id);
+      return { replyText: "Quán này hiện không khả dụng, anh/chị tìm quán khác giúp em nha.", session: back };
+    }
+    return {
+      replyText: result.replyText,
+      session: updated,
+      merchantIntent: result.merchantIntent,
+      orderRef: result.orderRef,
+      activeMerchantId: merchant.merchant_id,
+    };
   }
 
   async _openMerchant(customer, session, merchant, { entrySource }) {

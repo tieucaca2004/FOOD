@@ -3,6 +3,8 @@
 // no LLM in the decision path by default, fully testable without any API
 // key. AI (platform/ai/) may only ever suggest a fallback for `unknown`.
 
+import { normalizeSearchQuery } from "./searchQuery.js";
+
 const GREETING = /(xin chào|chào tổng đài|chào shop|^chào$|^hi$|^hello$|^alo$)/;
 const RETURN_TO_PLATFORM = /(quay lại tổng đài|quay lại|tìm quán khác|đổi quán|thoát quán|thoát ra)/;
 const GLOBAL_SEARCH_TRIGGER = /(quán nào khác|chỗ khác|nơi khác).*(bán|có)/;
@@ -39,31 +41,10 @@ export function classifyConciergeIntent(text) {
 
   if (raw.length === 0) return { intent: "unknown", merchantNameHint: null, searchKeywords: null };
 
-  // Fallback: treat the message as a food/category search query. Strip a
-  // handful of filler words so "tôi muốn ăn hủ tiếu xào" reduces to
-  // "hủ tiếu xào" for keyword matching against merchant catalogs.
-  const stripped = stripFillerWords(raw);
-  if (stripped.length === 0) return { intent: "unknown", merchantNameHint: null, searchKeywords: null };
-  return { intent: "search_food", merchantNameHint: null, searchKeywords: stripped };
-}
-
-const FILLER_PATTERNS = [
-  /^tìm kiếm\s+/i,
-  /^tìm\s+(?:quán|món)\s+/i,
-  /^tìm\s+/i,
-  /^tôi muốn ăn\s+/i,
-  /^mình muốn ăn\s+/i,
-  /^cho (tôi|mình|em)\s+/i,
-  /^tôi muốn\s+/i,
-  /^mình muốn\s+/i,
-  /^muốn ăn\s+/i,
-  /\s+(nào ngon|không ạ|không|ạ|nhé|nha)\s*$/i,
-];
-
-function stripFillerWords(text) {
-  let result = text.trim();
-  for (const pattern of FILLER_PATTERNS) {
-    result = result.replace(pattern, "").trim();
-  }
-  return result.replace(/[.!?]+$/, "").trim();
+  // Fallback: treat the message as a food/merchant search query. Leading/
+  // trailing conversational words are stripped (accent-insensitively) so
+  // "tôi muốn ăn hủ tiếu xào" / "tim quan nom nom" reduce to the keywords.
+  const { text: keywords } = normalizeSearchQuery(raw);
+  if (keywords.length === 0) return { intent: "unknown", merchantNameHint: null, searchKeywords: null };
+  return { intent: "search_food", merchantNameHint: null, searchKeywords: keywords };
 }

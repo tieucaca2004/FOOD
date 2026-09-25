@@ -9,9 +9,13 @@ const STATUS_WEIGHT = {
   [MERCHANT_STATUS.TRIAL]: 0.8,
 };
 
+// A query that names the merchant itself outranks any product-only match
+// (max product-only score is 3 + 1 + 1 = 5).
+const MERCHANT_NAME_MATCH_BONUS = 10;
+
 function scoreCandidate(candidate) {
-  const { matchQuality, hasAvailableMatch, merchantStatus } = candidate;
-  let score = 0;
+  const { matchQuality, hasAvailableMatch, merchantStatus, merchantNameMatch } = candidate;
+  let score = merchantNameMatch ? MERCHANT_NAME_MATCH_BONUS : 0;
   score += matchQuality === "exact" ? 3 : matchQuality === "keyword" ? 2 : 1;
   score += hasAvailableMatch ? 1 : 0;
   score += STATUS_WEIGHT[merchantStatus] ?? 0;

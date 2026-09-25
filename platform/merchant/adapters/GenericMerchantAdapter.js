@@ -2,6 +2,7 @@ import { MerchantModule } from "../MerchantModule.js";
 import { stripAccents } from "../../../src/nlp/normalize.js";
 import { classifyIntent } from "../../../src/nlp/intentEngine.js"; // pure, read-only reuse
 import { parseItemRequest, resolveItemRequest, parseQuantityChange, parseRemoval, matchByName } from "../../nlp/genericOrderText.js";
+import { classifyMerchantFollowUp, parseProductQuestion } from "../../nlp/merchantFollowUp.js";
 
 const MAX_CHOICES_SHOWN = 10;
 
@@ -125,16 +126,23 @@ export class GenericMerchantAdapter extends MerchantModule {
           return this._reply(await this._menuText());
         case "product_price":
           return this._priceOf(text);
-        case "store_location": {
-          const merchant = this.merchantDataService.getById(this._merchantId);
-          return this._reply(merchant.address ? `📍 ${merchant.address}` : "Dạ quán chưa cập nhật địa chỉ.");
-        }
-        default:
+        case "store_location":
+          return this._locationReply();
+        case "product_availability":
+          return this._availabilityOf(parseProductQuestion(text) ?? parseItemRequest(text).query);
+        default: {
+          // "có Seafood Pizza không" / unaccented "co thuc don ko", "quan o dau".
+          const asked = parseProductQuestion(text);
+          const followUp = classifyMerchantFollowUp(text);
+          if (followUp?.kind === "menu") return this._reply(await this._menuText());
+          if (followUp?.kind === "location") return this._locationReply();
+          if (asked) return this._availabilityOf(asked);
           // "tăng pizza hải sản lên 3" — no classifyIntent rule for tăng/giảm.
           if (parseQuantityChange(text)) return this._changeQuantity(platformCustomerId, text);
           // "2 pizza hải sản" — a leading quantity with no verb is still an add.
           if (parseItemRequest(text).quantity !== null) return this._addItem(platformCustomerId, text);
           return this._reply(this._helpText());
+        }
       }
     } catch (err) {
       const known = ERROR_REPLIES[err.code];
@@ -243,6 +251,29 @@ export class GenericMerchantAdapter extends MerchantModule {
       "confirm_order",
       order.order_code
     );
+  }
+
+  _locationReply() {
+    const merchant = this.merchantDataService.getById(this._merchantId);
+    return this._reply(merchant.address ? `📍 ${merchant.name}: ${merchant.address}` : "Dạ quán chưa cập nhật địa chỉ.");
+  }
+
+  // "có Seafood Pizza không" — answered from this merchant's own menu only.
+  _availabilityOf(query) {
+    if (!query) return this._reply(this._helpText());
+    const products = this.menuService.listProducts(this._merchantId, { includeUnavailable: true });
+    const { match, candidates } = matchByName(query, products);
+    if (match) {
+      if (!match.available) return this._reply(`Dạ ${match.name} hiện tạm hết ạ.`);
+      return this._reply(`Dạ có ạ: ${match.name} — ${vnd(match.price)}\nGõ "thêm 1 ${match.name}" để thêm vào giỏ.`);
+    }
+    if (candidates.length > 1) {
+      const lines = candidates
+        .slice(0, MAX_CHOICES_SHOWN)
+        .map((p) => `• ${p.name}: ${vnd(p.price)}${p.available ? "" : " (tạm hết)"}`);
+      return this._reply(`Dạ quán có ${candidates.length} món phù hợp:\n${lines.join("\n")}`);
+    }
+    return this._reply(`Dạ quán chưa có món "${query}" ạ. Gõ "menu" để xem thực đơn.`);
   }
 
   _priceOf(text) {
