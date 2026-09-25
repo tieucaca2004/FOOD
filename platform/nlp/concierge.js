@@ -48,6 +48,9 @@ export function classifyConciergeIntent(text) {
 }
 
 const FILLER_PATTERNS = [
+  /^tìm kiếm\s+/i,
+  /^tìm\s+(?:quán|món)\s+/i,
+  /^tìm\s+/i,
   /^tôi muốn ăn\s+/i,
   /^mình muốn ăn\s+/i,
   /^cho (tôi|mình|em)\s+/i,

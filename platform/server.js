@@ -44,7 +44,12 @@ const registry = new MerchantRegistry({
   repos,
   moduleFactories: {
     atieu: buildAtieuAdapterFactory({ services: atieuServices, router: atieuRouter }),
-    generic: buildGenericAdapterFactory({ menuService: services.menu, merchantDataService: services.merchantData }),
+    generic: buildGenericAdapterFactory({
+      menuService: services.menu,
+      merchantDataService: services.merchantData,
+      cartService: services.cart,
+      orderService: services.orders,
+    }),
   },
 });
 

@@ -128,7 +128,14 @@ export class PlatformRouter {
   }
 
   async _runSearch(customer, session, keywords) {
-    const { organic, sponsored } = await this.agentSearch.searchMerchants(keywords);
+    let { organic, sponsored } = await this.agentSearch.searchMerchants(keywords);
+    if (organic.length === 0 && sponsored.length === 0) {
+      // No dish matched — the text may be a shop name ("Nôm Nôm Restaurant").
+      // Dish results are never mixed with or re-ranked by this fallback.
+      const byName = this.discovery.searchByMerchantNameLoose(keywords).map((merchant) => ({ merchant, matches: [] }));
+      organic = byName.filter((c) => !c.merchant.sponsored);
+      sponsored = byName.filter((c) => c.merchant.sponsored);
+    }
     const updated = this.services.sessions.update(session.id, {
       lastSearchQuery: keywords,
       lastSearchResults: [...organic, ...sponsored].map((c) => ({ merchant_id: c.merchant.merchant_id, name: c.merchant.name })),

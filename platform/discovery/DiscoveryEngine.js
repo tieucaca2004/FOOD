@@ -1,4 +1,11 @@
 import { rankMerchantResults } from "../domain/ranking.js";
+import { stripAccents } from "../../src/nlp/normalize.js";
+
+function normalizeName(text) {
+  return stripAccents(text || "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
 /**
  * USER QUERY -> (NLP already done by caller) -> structured keywords ->
@@ -53,6 +60,15 @@ export class DiscoveryEngine {
 
   searchByMerchantName(nameFragment) {
     return this.merchantDataService.findDiscoverableByNameFragment(nameFragment);
+  }
+
+  // Accent/case-insensitive shop-name match over discoverable merchants
+  // only ("nom nom restaurant" finds "[DEMO] Nôm Nôm Restaurant"). Used by
+  // PlatformRouter as a fallback when a free-text search matched no dish.
+  searchByMerchantNameLoose(text) {
+    const wanted = normalizeName(text);
+    if (wanted.length < 3) return [];
+    return this.merchantDataService.listDiscoverable().filter((m) => normalizeName(m.name).includes(wanted));
   }
 
   // Any-status lookup — used by PlatformRouter to tell "no such merchant"

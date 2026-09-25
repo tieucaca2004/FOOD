@@ -13,6 +13,7 @@ import { DiscoveryEngine } from "../../discovery/DiscoveryEngine.js";
 import { AgentSearchService } from "../../services/agentSearchService.js";
 import { PlatformRouter } from "../../router/PlatformRouter.js";
 import { createPlatformApp } from "../../api/app.js";
+import { runNomNomDemoSeed } from "../../db/demoSeed.js";
 
 // Reuses A Tiểu's OWN test helper (test/helpers/testApp.js) completely
 // unmodified — this is exactly how a real "future merchant" onboarding
@@ -80,6 +81,7 @@ export function buildTestPlatform({
   withAtieu = true,
   withGenericFixture = false,
   genericFixtureMerchants = [],
+  withNomNomDemo = false,
   dispatchPort,
 } = {}) {
   const db = createPlatformConnection(":memory:");
@@ -102,6 +104,20 @@ export function buildTestPlatform({
 
   const moduleFactories = {};
   let atieuCtx = null;
+  const genericFactory = () =>
+    buildGenericAdapterFactory({
+      menuService: services.menu,
+      merchantDataService: services.merchantData,
+      cartService: services.cart,
+      orderService: services.orders,
+    });
+
+  if (withNomNomDemo) {
+    // Runs the real opt-in demo seed (platform/db/demoSeed.js) against
+    // this in-memory DB — the same code `npm run platform:seed:demo` runs.
+    runNomNomDemoSeed(db);
+    moduleFactories.generic = genericFactory();
+  }
 
   if (withAtieu) {
     atieuCtx = buildAtieuTestContext();
@@ -141,14 +157,14 @@ export function buildTestPlatform({
       available: true,
       keywords: ["hai san", "hu tieu hai san"],
     });
-    moduleFactories.generic = buildGenericAdapterFactory({ menuService: services.menu, merchantDataService: services.merchantData });
+    moduleFactories.generic = genericFactory();
   }
 
   if (genericFixtureMerchants.length > 0) {
     for (const merchantId of genericFixtureMerchants) {
       registerGenericFixture(repos, merchantId);
     }
-    moduleFactories.generic = buildGenericAdapterFactory({ menuService: services.menu, merchantDataService: services.merchantData });
+    moduleFactories.generic = genericFactory();
   }
 
   const registry = new MerchantRegistry({ repos, moduleFactories });

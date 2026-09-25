@@ -41,6 +41,9 @@ export function buildAtieuAdapterFactory({ services, router }) {
   return (merchant) => new AtieuMerchantAdapter({ merchantId: merchant.merchant_id, services, router });
 }
 
-export function buildGenericAdapterFactory({ menuService, merchantDataService }) {
-  return (merchant) => new GenericMerchantAdapter({ merchantId: merchant.merchant_id, menuService, merchantDataService });
+// cartService/orderService are optional — omit them and generic merchants
+// stay menu-only (the pre-chat-cart behavior).
+export function buildGenericAdapterFactory({ menuService, merchantDataService, cartService, orderService }) {
+  return (merchant) =>
+    new GenericMerchantAdapter({ merchantId: merchant.merchant_id, menuService, merchantDataService, cartService, orderService });
 }
