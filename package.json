@@ -22,6 +22,7 @@
     "knowledge:collect": "node tools/knowledge-collector/cli.js",
     "test:collector": "node --test tools/knowledge-collector/test/*.test.js",
     "platform:aliases": "node platform/scripts/aliases.js",
+    "platform:telegram:webhook": "node platform/scripts/setup-telegram-webhook.js",
     "test": "node --test test/unit/*.test.js test/integration/*.test.js test/e2e/*.test.js",
     "test:platform": "node --test platform/test/unit/*.test.js platform/test/integration/*.test.js platform/test/e2e/*.test.js",
     "test:all": "npm test && npm run test:platform && npm run test:collector",
