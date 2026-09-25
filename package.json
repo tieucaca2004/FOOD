@@ -13,6 +13,7 @@
     "platform:dev": "node --watch platform/server.js",
     "platform:migrate": "node platform/scripts/migrate.js",
     "platform:seed": "node platform/scripts/seed.js",
+    "platform:telegram:webhook": "node platform/scripts/setup-telegram-webhook.js",
     "test": "node --test test/unit/*.test.js test/integration/*.test.js test/e2e/*.test.js",
     "test:platform": "node --test platform/test/unit/*.test.js platform/test/integration/*.test.js platform/test/e2e/*.test.js",
     "test:all": "npm test && npm run test:platform"
