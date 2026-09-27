@@ -127,6 +127,20 @@ function displayedDishes(operation, group) {
   return dishes.slice(0, 10).map((x) => ({ merchantId: x.merchantId, productId: x.p.id }));
 }
 
+// FORM 13 — a reference-only place is never ordered: said plainly, deterministically
+const REFERENCE_ONLY_ORDER = "Dạ quán này hiện chỉ có thông tin tham khảo, chưa hỗ trợ đặt món qua FOOD.";
+const escapeRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** The catalog dishes a merchant reply SHOWED as menu lines ("🍜 Name: …", "- Name: …"), in the order shown. */
+function menuShownIn(replyText, items) {
+  const text = String(replyText ?? "");
+  return items
+    .map((i) => ({ name: i.name, at: text.search(new RegExp(`(?:^|\\n)\\s*(?:🍜|🍽|-|•)\\s*${escapeRe(i.name)}:\\s`, "u")) }))
+    .filter((x) => x.at >= 0)
+    .sort((a, b) => a.at - b.at)
+    .map((x) => x.name);
+}
+const vndText = (n) => `${Number(n).toLocaleString("vi-VN")}đ`;
+
 // "menu quán thứ 2", "quán này có món gì": the place's MENU, not its list card
 const MENU_QUESTION = /\b(?:menu|thuc don|mon gi|co gi|ban gi|nhung mon nao|mon nao)\b/;
 
@@ -245,7 +259,13 @@ export class PlatformRouter {
     // Everything else while inside a merchant context is scoped to that
     // merchant — never re-run a platform-wide search behind the customer's
     // back (spec §10).
-    const result = await this._routeToMerchant(session.active_merchant_id, customer.id, text);
+    // FORM 13 — the menu the customer was SHOWN here: "món thứ 2" / "món đó" / "giá món đó" answered from the catalog,
+    // "cho tôi 2 phần" handed to the merchant's own engine as "2 <exact dish name>" (the engine still does the ordering)
+    const bridged = await this._menuBridge(customer, session, text);
+    if (bridged?.replyText) return bridged;
+    const engineText = bridged?.engineText ?? text;
+    const result = await this._routeToMerchant(session.active_merchant_id, customer.id, engineText);
+    if (result.ok && !result.handBack) await this._recordMerchantMenu(customer.id, session.active_merchant_id, result.replyText);
     if (!result.ok) {
       const updated = this.services.sessions.returnToPlatform(session.id);
       return { replyText: "Quán này hiện không khả dụng, anh/chị tìm quán khác giúp em nha.", session: updated };
@@ -320,6 +340,7 @@ ${elsewhere}` : result.replyText,
     // ONE reading of the message per turn: the plan below and every concierge call of this turn use it
     // A pure reference ("quán thứ 2", "quán đó", "món thứ 2", "giá món đó", "còn không?") is resolved against the stored
     // context — or asked back — before any plan or model call: the model never decides what a reference means (FORM 10)
+    if (!aboutOthers && this._referenceOnlyOrder(session, text)) return { replyText: REFERENCE_ONLY_ORDER, session, knowledgeFollowUp: "reference_only" };
     if (!aboutOthers && this._isPureReference(text, concierge)) {
       const resolved = this._knowledgeFollowUp(session, text, concierge);
       if (resolved) return resolved;
@@ -605,6 +626,81 @@ ${elsewhere}` : result.replyText,
     // the list stays the subject of the conversation; the original query is never overwritten
     this.services.sessions.setKnowledgeContext(session.id, { ...context, shownCount: answer.shownCount, focusId: answer.focusId ?? null, touchedAt: new Date().toISOString() });
     return { replyText: answer.text, session, knowledgeFollowUp: question.kind };
+  }
+
+  /**
+   * "cho tôi 2 phần" / "đặt" about the Food Knowledge place being talked about (no catalog list on screen, nothing
+   * named): a reference place is not orderable on FOOD — FOOD says so, without a model call and without ordering.
+   */
+  _referenceOnlyOrder(session, text) {
+    const intent = understandMessage(text).intent;
+    if (!["quantity_only", "checkout", "confirm_order"].includes(intent)) return false;
+    if ((session.lastSearchResults ?? []).length) return false;
+    const ctx = this.services.sessions.getKnowledgeContext(session.id);
+    return isFresh(ctx) && shownPlaces(ctx).length > 0;
+  }
+
+  // --- FORM 13: the menu a merchant showed, per customer + merchant (conversation_state_json, next to the engine's
+  // own working memory, kept only for the SAME merchant) — menu = exact catalog names in the order shown; dish = the one
+  // picked from it. Fresh for KNOWLEDGE_CONTEXT_TTL_MS (the same 30 minutes as a reference list).
+  _merchantMemory(customerId, merchantId) {
+    const state = this._conversationStates().getByCustomer(customerId);
+    return state?.merchantId === merchantId ? state.menuBridge ?? null : null;
+  }
+
+  _setMerchantMemory(customerId, merchantId, patch) {
+    const store = this._conversationStates();
+    const state = store.getByCustomer(customerId);
+    const base = state?.merchantId === merchantId ? state : { merchantId };
+    store.saveForCustomer(customerId, { ...base, menuBridge: { ...(base.menuBridge ?? {}), ...patch } });
+  }
+
+  /** After a merchant reply: if it SHOWED menu lines, that is the menu "món thứ N" counts in (a new menu drops the dish). */
+  async _recordMerchantMenu(customerId, merchantId, replyText, menu = null) {
+    try {
+      const summary = menu ?? (await this.merchantRouter.registry.getAdapter(merchantId)?.getMenuSummary?.());
+      const names = menuShownIn(replyText, summary?.items ?? []);
+      if (names.length) this._setMerchantMemory(customerId, merchantId, { menu: { items: names, touchedAt: new Date().toISOString() }, dish: null });
+    } catch {
+      // a menu that cannot be read is simply not a reference
+    }
+  }
+
+  /**
+   * Inside a merchant: a dish reference against the menu shown, or a quantity for the dish picked. Returns a reply
+   * ({replyText}), the text to hand the merchant's engine ({engineText}), or null (the engine gets the message as is).
+   */
+  async _menuBridge(customer, session, text) {
+    const merchantId = session.active_merchant_id;
+    const adapter = this.merchantRouter.registry.getAdapter(merchantId);
+    if (!adapter?.getMenuSummary) return null;
+    const memory = this._merchantMemory(customer.id, merchantId);
+    const menu = memory?.menu && isFresh(memory.menu) ? memory.menu.items : null;
+    const dish = memory?.dish && isFresh(memory.dish) ? memory.dish.name : null;
+    const catalogItem = async (name) => (await adapter.getMenuSummary()).items.find((i) => i.name === name) ?? null;
+    const reply = (replyText) => ({ replyText, session, activeMerchantId: merchantId, menuBridge: true });
+    const q = classifyKnowledgeFollowUp(text);
+    if (q && !q.residue && (q.kind === "product" || q.productOrdinal != null || q.productRef)) {
+      let name;
+      if (q.productOrdinal != null) {
+        if (!menu) return reply("Dạ anh/chị xem menu trước giúp em nha (gõ “menu”), rồi chọn “món thứ …” ạ.");
+        const index = q.productOrdinal < 0 ? menu.length + q.productOrdinal : q.productOrdinal;
+        if (index < 0 || index >= menu.length) return reply(`Dạ menu vừa rồi có ${menu.length} món thôi ạ.`);
+        name = menu[index];
+      } else if (dish) name = dish;
+      else return null; // no dish picked here: "giá món này?" stays the merchant engine's own question (unchanged)
+      const item = await catalogItem(name);
+      if (!item) return reply("Dạ món đó hiện không còn trong thực đơn của quán ạ.");
+      this._setMerchantMemory(customer.id, merchantId, { dish: { name: item.name, touchedAt: new Date().toISOString() } });
+      return reply(`Dạ ${item.name}: ${vndText(item.price)}${item.available === false ? " (tạm hết)" : ""}.\nAnh/chị muốn đặt mấy phần ạ? (VD: “cho tôi 2 phần”)`);
+    }
+    // "cho tôi 2 phần": the dish picked from the menu, by its exact catalog name (never a guess from "2 phần")
+    const msg = understandMessage(text);
+    if (msg.intent === "quantity_only" && msg.quantity > 0 && dish) {
+      const item = await catalogItem(dish);
+      if (item) return { engineText: `${msg.quantity} ${item.name}` };
+    }
+    return null;
   }
 
   /** A message that is ONLY a reference to something shown (no dish / place / region of its own). */
@@ -1220,7 +1316,9 @@ ${elsewhere}` : result.replyText,
       searchQuery: session.last_search_query,
     });
     const menu = await adapter.getMenuSummary();
-    return { replyText: formatMenuSummary(menu), session: updated, openedMerchantId: merchant.merchant_id };
+    const replyText = formatMenuSummary(menu);
+    await this._recordMerchantMenu(customer.id, merchant.merchant_id, replyText, menu);
+    return { replyText, session: updated, openedMerchantId: merchant.merchant_id };
   }
 
   _greetingText() {

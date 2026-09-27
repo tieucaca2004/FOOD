@@ -43,12 +43,18 @@ function isDiscovery(lower) {
 
 function extractMerchantNameHint(text) {
   const patterns = [
+    // "(cho tôi) (xem / mở) menu (của) (quán) <name>": the menu OF a named place (FORM 13) — "Cho tôi menu của A Tiểu"
+    /^(?:cho(?:\s+(?:tôi|mình|em|tui|anh|chị))?\s+)?(?:(?:xem|mở|coi)\s+)?(?:menu|thực đơn)\s+(?:của\s+)?(?:quán\s+)?(.+)$/i,
     /(?:muốn ăn ở|ăn ở|ăn tại|ở quán|tại quán)\s+(.+)/i,
     /(?:xem|chọn|mở)\s+(?:quán\s+)?(.+)/i,
   ];
   for (const re of patterns) {
     const m = text.match(re);
-    if (m && m[1] && m[1].trim().length > 0) return m[1].trim().replace(/[.!?]+$/, "");
+    if (!m || !m[1] || m[1].trim().length === 0) continue;
+    const hint = m[1].trim().replace(/[.!?]+$/, "");
+    // "menu quán này / đó": a reference to the place being talked about, never a name
+    if (/^(?:quán\s+|tiệm\s+|chỗ\s+)?(?:này|đó|kia|ấy|nay|do|kia|ay)$/iu.test(hint)) return null;
+    return hint;
   }
   return null;
 }
