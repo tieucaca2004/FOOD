@@ -1,4 +1,5 @@
 import { normalizeTelegramUpdate } from "./telegram/normalizeTelegramUpdate.js";
+import { fromTelegramUpdate } from "./inboundMessage.js";
 import { sendTelegramMessage } from "./telegram/telegramClient.js";
 import { logger } from "../../src/logger.js";
 
@@ -28,11 +29,33 @@ const DEDUPE_KEY_PREFIX = "telegram:";
  * A failed send is reported in respond_error, never turned into an error
  * response — the update was processed, so Telegram must not redeliver it.
  */
-export function createTelegramWebhookHandler({ repos, services, router }) {
+export function createTelegramWebhookHandler({ repos, services, router, knowledgeIngest = null, contributions = false }) {
   return async function handleTelegramWebhook(req, res) {
     const requestId = req.requestId;
 
-    const event = normalizeTelegramUpdate(req.body);
+    // Knowledge Group (KNOWLEDGE_INGEST_ENABLED + KNOWLEDGE_GROUP_CHAT_IDS only): the message is EVIDENCE for
+    // Food Knowledge, never a customer conversation — stored (idempotent on chat + message id), queued, acked;
+    // no reply is sent to the group. A storage failure is a 500, so Telegram redelivers and nothing is lost.
+    if (knowledgeIngest?.accepts(req.body)) {
+      try {
+        const result = knowledgeIngest.receive(req.body);
+        return res.json({ status: "ingested", channel: "telegram", ingest_status: result.status });
+      } catch (err) {
+        logger.error("WEBHOOK", "knowledge ingestion receive failed", { requestId, error: String(err?.message ?? err).slice(0, 200) });
+        return res.status(500).json({ status: "error", error: "internal_error" });
+      }
+    }
+
+    let event = normalizeTelegramUpdate(req.body);
+    // Customer contributions (USER_CONTRIBUTIONS_ENABLED): a photo / image document (or unsupported media) is no
+    // longer ignored — it goes, normalised, to the same pipeline; the router wrapper answers it. Text is unchanged.
+    let inbound = null;
+    if (!event && contributions) {
+      inbound = fromTelegramUpdate(req.body);
+      if (inbound) {
+        event = { channel: "telegram", updateId: inbound.updateId, messageId: inbound.messageId, externalChatId: inbound.externalChatId, externalUserId: inbound.externalUserId, text: inbound.text ?? "", timestamp: inbound.timestamp, displayName: inbound.displayName };
+      }
+    }
     if (!event) {
       return res.json({ status: "ignored", channel: "telegram" });
     }
@@ -75,11 +98,11 @@ export function createTelegramWebhookHandler({ repos, services, router }) {
       const customer = services.customers.getOrCreateByZaloUserId(namespacedCustomerId, event.displayName);
       const session = services.sessions.getOrCreate(customer.id);
 
-      repos.messages.log({ sessionId: session.id, direction: "in", rawText: event.text });
+      repos.messages.log({ sessionId: session.id, direction: "in", rawText: inbound ? `[${inbound.attachments.length ? "ảnh" : inbound.unsupported}]${inbound.text ? ` ${inbound.text}` : ""}` : event.text });
 
-      const result = await router.handle({ customer, session, text: event.text });
+      const result = await router.handle({ customer, session, text: event.text, ...(inbound && { inbound }) });
 
-      repos.messages.log({ sessionId: session.id, direction: "out", rawText: result.replyText });
+      if (!inbound || result.replyText) repos.messages.log({ sessionId: session.id, direction: "out", rawText: result.replyText });
 
       const sendResult = result.replyText
         ? await sendTelegramMessage({ chatId: event.externalChatId, text: result.replyText })

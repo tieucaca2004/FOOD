@@ -1,0 +1,38 @@
+{
+  "note": "Listing pages of permitted source families (founder-listed sites). The collector walks each site's OWN archive/category pages (robots.txt checked on every fetch, polite delay, snapshot reuse) and keeps article URLs whose slug is about eating out. The inventory is persisted next to the knowledge DB (source-inventory.json) so runs do not rediscover. Prohibited platforms (Google Maps, Foody, Tripadvisor, ShopeeFood, GrabFood, Facebook) are never listed here.",
+  "families": [
+    {
+      "id": "vinwonders-vi-nha-trang",
+      "source_type": "blog",
+      "listing": {
+        "url_template": "https://vinwonders.com/vi/wonderpedia/nha-trang/trang/{n}/",
+        "from": 1,
+        "to": 120,
+        "stop_after_empty": 3
+      },
+      "article_pattern": "^https://vinwonders\\.com/vi/wonderpedia/news/[^/?#]+/$"
+    },
+    {
+      "id": "mia-nha-trang-an-gi",
+      "source_type": "blog",
+      "listing": {
+        "url_template": "https://mia.vn/cam-nang-du-lich/nha-trang/an-gi?page={n}",
+        "from": 1,
+        "to": 80,
+        "stop_after_empty": 3
+      },
+      "article_pattern": "^https://mia\\.vn/cam-nang-du-lich/[a-z0-9-]+-[0-9]+$"
+    },
+    {
+      "id": "vinwonders-en-nha-trang",
+      "source_type": "blog",
+      "listing": {
+        "url_template": "https://vinwonders.com/en/wonderpedia/nha-trang/page/{n}/",
+        "from": 1,
+        "to": 120,
+        "stop_after_empty": 3
+      },
+      "article_pattern": "^https://vinwonders\\.com/en/wonderpedia/news/[^/?#]+/$"
+    }
+  ]
+}

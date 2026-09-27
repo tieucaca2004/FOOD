@@ -14,6 +14,7 @@ import { AgentSearchService } from "../../services/agentSearchService.js";
 import { PlatformRouter } from "../../router/PlatformRouter.js";
 import { createPlatformApp } from "../../api/app.js";
 import { runNomNomDemoSeed } from "../../db/demoSeed.js";
+import { runPlatformSeed } from "../../db/seed.js";
 
 // Reuses A Tiểu's OWN test helper (test/helpers/testApp.js) completely
 // unmodified — this is exactly how a real "future merchant" onboarding
@@ -76,13 +77,23 @@ function registerGenericFixture(repos, merchantId, status = "ACTIVE") {
  *   GENERIC_FIXTURES (e.g. ["MERCHANT002", "MERCHANT003"]) to additionally
  *   register — each ACTIVE by default; use `repos.merchants.setStatus(...)`
  *   after building to flip one to SUSPENDED/EXPIRED for exclusion tests.
+ * @param {"legacy"|"generic"} opts.atieuEngine with withAtieu: "legacy" (default)
+ *   drives ATIEU001 through the real src/ module; "generic" runs the real
+ *   platform seed with PLATFORM_ATIEU_ENGINE=generic semantics — ATIEU001 on
+ *   the generic merchant engine over its imported catalog.
  */
 export function buildTestPlatform({
   withAtieu = true,
+  atieuEngine = "legacy",
   withGenericFixture = false,
   genericFixtureMerchants = [],
   withNomNomDemo = false,
   dispatchPort,
+  dispatchChannels,
+  foodKnowledge = null,
+  gpt = null,
+  knowledgeIngest = null,
+  contributions = null,
 } = {}) {
   const db = createPlatformConnection(":memory:");
   runPlatformMigrations(db);
@@ -99,7 +110,9 @@ export function buildTestPlatform({
   // upload dir (never the real data/uploads/menu-imports) — spec §29/§30.
   const visionProvider = new FakeMenuVisionProvider();
   const imageStorage = new MenuImageStorage(path.join(os.tmpdir(), `menu-import-test-${randomUUID()}`));
-  const services = createPlatformServices(repos, { visionProvider, imageStorage, dispatchPort });
+  // dispatchChannels: fake delivery channels (e.g. { telegram: new TelegramDispatchChannel({ send }) })
+  // for the real generic dispatch port — never a real Telegram call in tests.
+  const services = createPlatformServices(repos, { visionProvider, imageStorage, dispatchPort, dispatchChannels });
   const ai = new NullProvider();
 
   const moduleFactories = {};
@@ -110,6 +123,10 @@ export function buildTestPlatform({
       merchantDataService: services.merchantData,
       cartService: services.cart,
       orderService: services.orders,
+      conversationStates: repos.conversationStates,
+      cartCheckout: repos.cartCheckout,
+      productLanguage: services.productLanguage,
+      customerMemory: services.customerMemory,
     });
 
   if (withNomNomDemo) {
@@ -119,7 +136,11 @@ export function buildTestPlatform({
     moduleFactories.generic = genericFactory();
   }
 
-  if (withAtieu) {
+  if (withAtieu && atieuEngine === "generic") {
+    // The same code server boot runs (platform/db/seed.js) — no test-only catalog.
+    runPlatformSeed(db, { atieuEngine: "generic" });
+    moduleFactories.generic = genericFactory();
+  } else if (withAtieu) {
     atieuCtx = buildAtieuTestContext();
     // Goes through the repository (not raw SQL) so account_status/active
     // (Phase 1's split model) stay in sync automatically — see
@@ -170,11 +191,17 @@ export function buildTestPlatform({
   const registry = new MerchantRegistry({ repos, moduleFactories });
   const merchantRouter = new MerchantRouter(registry);
   const discovery = new DiscoveryEngine(services.merchantData, registry);
-  const agentSearch = new AgentSearchService({ discovery, registry });
-  const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai });
-  const app = createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router });
+  // foodKnowledge: a test-built adapter (services/foodKnowledgeAdapter.js), off unless passed
+  const agentSearch = new AgentSearchService({ discovery, registry, foodKnowledge: typeof foodKnowledge === "function" ? foodKnowledge({ services, merchantRouter }) : foodKnowledge });
+  // gpt: a test-built GptFoodConcierge (scripted provider — never the real OpenAI API), off unless passed
+  const gptConcierge = typeof gpt === "function" ? gpt({ services, repos, agentSearch, merchantRouter }) : gpt;
+  const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai, gpt: gptConcierge });
+  // contributions: a test-built ContributionService factory (off unless passed) — the channels then see the wrapped router
+  const contributionService = typeof contributions === "function" ? contributions({ services, repos, foodKnowledge: agentSearch.foodKnowledge ?? null }) : null;
+  const channelRouter = contributionService ? contributionService.wrapRouter(router) : router;
+  const app = createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router: channelRouter, knowledgeIngest, contributions: Boolean(contributionService) });
 
-  return { db, repos, services, ai, visionProvider, imageStorage, registry, merchantRouter, discovery, agentSearch, router, app, atieuCtx };
+  return { db, repos, services, ai, visionProvider, imageStorage, registry, merchantRouter, discovery, agentSearch, router, app, atieuCtx, contributionService };
 }
 
 export async function startServer(app) {

@@ -1,0 +1,121 @@
+{
+  "id": "vn.khanh-hoa.nha-trang",
+  "name": "Nha Trang",
+  "search_names": [
+    "Nha Trang",
+    "Khánh Hòa"
+  ],
+  "regions": [
+    {
+      "id": "vn",
+      "name": "Việt Nam",
+      "level": "country"
+    },
+    {
+      "id": "vn.khanh-hoa",
+      "name": "Khánh Hòa",
+      "parentId": "vn",
+      "level": "province"
+    },
+    {
+      "id": "vn.khanh-hoa.nha-trang",
+      "name": "Nha Trang",
+      "parentId": "vn.khanh-hoa",
+      "level": "locality"
+    }
+  ],
+  "bbox": {
+    "south": 12.17,
+    "west": 109.13,
+    "north": 12.32,
+    "east": 109.23
+  },
+  "note": "Street and area names as people commonly use them. Administrative units changed in 2025; addresses are always stored verbatim, never rewritten.",
+  "streets": [
+    "Trần Phú",
+    "Nguyễn Thiện Thuật",
+    "Hùng Vương",
+    "Nguyễn Thị Minh Khai",
+    "Lê Thánh Tôn",
+    "Phạm Văn Đồng",
+    "Yersin",
+    "Thống Nhất",
+    "Lê Hồng Phong",
+    "Biệt Thự"
+  ],
+  "areas": [
+    "Vĩnh Hải",
+    "Vĩnh Phước",
+    "Lộc Thọ",
+    "Phước Tiến",
+    "Tân Lập",
+    "Phước Hòa",
+    "Vĩnh Nguyên",
+    "Xương Huân"
+  ],
+  "foods": [
+    "bún cá",
+    "bún sứa",
+    "nem nướng",
+    "bánh căn",
+    "bánh xèo",
+    "hải sản",
+    "bánh canh",
+    "bún chả cá",
+    "bánh bèo",
+    "cơm gà"
+  ],
+  "cuisines": [
+    "Việt",
+    "Trung Hoa",
+    "Nhật",
+    "Hàn",
+    "Thái",
+    "chay",
+    "hải sản",
+    "ăn sáng",
+    "ăn vặt",
+    "cà phê"
+  ],
+  "wards": [
+    "Lộc Thọ",
+    "Tân Lập",
+    "Phước Tiến",
+    "Phước Hải",
+    "Phước Hòa",
+    "Phước Tân",
+    "Phước Long",
+    "Phước Đồng",
+    "Vĩnh Hải",
+    "Vĩnh Phước",
+    "Vĩnh Thọ",
+    "Vĩnh Nguyên",
+    "Vĩnh Hòa",
+    "Vĩnh Trường",
+    "Vĩnh Lương",
+    "Vĩnh Phương",
+    "Vĩnh Ngọc",
+    "Vĩnh Thạnh",
+    "Vĩnh Trung",
+    "Vĩnh Thái",
+    "Ngọc Hiệp",
+    "Xương Huân",
+    "Vạn Thắng",
+    "Vạn Thạnh",
+    "Phương Sài",
+    "Phương Sơn",
+    "Bắc Nha Trang",
+    "Nam Nha Trang",
+    "Tây Nha Trang"
+  ],
+  "nearby": [
+    "Ninh Hòa",
+    "Diên Khánh",
+    "Cam Lâm",
+    "Cam Ranh",
+    "Vạn Ninh",
+    "Khánh Vĩnh",
+    "Khánh Sơn"
+  ],
+  "note_wards": "Ward / area names as addresses write them (pre-2025 wards and the 2025 wards Bắc/Nam/Tây Nha Trang are both kept, never rewritten). Used only to COUNT which area an address names; nearby municipalities are never counted as Nha Trang."
+}

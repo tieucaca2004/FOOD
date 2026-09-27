@@ -32,6 +32,12 @@ function invalid(code, message) {
   return err;
 }
 
+// Same dish name: exact up to case and spacing, accents respected ("Hủ Tiếu Xào Bơ" is not "Hủ Tiếu Xào Bò").
+export function sameDishName(a, b) {
+  const key = (s) => String(s ?? "").normalize("NFC").toLowerCase().replace(/\s+/g, " ").trim();
+  return key(a) !== "" && key(a) === key(b);
+}
+
 export class MenuService {
   constructor(repos) {
     this.repos = repos;
@@ -253,6 +259,14 @@ export class MenuService {
           // Defensive re-check — approveImport() should already guarantee
           // this, but publish never trusts a draft blindly.
           if (product.needs_review || product.price == null) continue;
+
+          // A dish this merchant already sells (matched by exact name at import time and re-checked here):
+          // its price / description change in place — never a duplicate product. Availability is untouched.
+          const existing = product.existing_product_id != null ? existingProducts.find((p) => p.id === product.existing_product_id) : null;
+          if (existing && sameDishName(existing.name, product.name)) {
+            this.updateProduct(merchantId, existing.id, { price: product.price, ...(product.description ? { description: product.description } : {}) });
+            continue;
+          }
 
           const sku = this._generateUniqueSku(product.name, usedSkus);
           usedSkus.add(sku);

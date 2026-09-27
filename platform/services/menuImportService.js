@@ -1,4 +1,5 @@
 import { parseMenuText, flagDuplicates } from "./menuParserService.js";
+import { sameDishName } from "./menuService.js";
 import { validateMenuImage } from "./imageValidation.js";
 
 function importError(code, message, status = 400) {
@@ -169,7 +170,22 @@ export class MenuImportService {
     };
   }
 
+  // A draft line naming a dish this merchant already sells (exact name) is an UPDATE of that dish: the
+  // reviewer sees which product and its current price; publish changes it in place instead of duplicating it.
+  _markExisting(merchantId, draft) {
+    const existing = this.menuService.listProducts(merchantId, { includeUnavailable: true });
+    for (const category of draft.categories || []) {
+      for (const product of category.products || []) {
+        const hit = existing.find((p) => sameDishName(p.name, product.name));
+        product.existing_product_id = hit ? hit.id : null;
+        product.previous_price = hit ? hit.price : null;
+      }
+    }
+    return draft;
+  }
+
   _finishDraft(merchantId, importId, draft, sourceType) {
+    this._markExisting(merchantId, draft);
     this._audit(merchantId, importId, "MENU_IMPORT_PARSED", { sourceType });
     const status = draftHasReviewItems(draft) ? "REVIEW_REQUIRED" : "DRAFT";
     const saved = this.repos.menuImports.setDraft(importId, status, draft);
@@ -192,12 +208,12 @@ export class MenuImportService {
       throw importError("INVALID_DRAFT", "Edited draft must have a categories[] array");
     }
 
-    const normalized = recomputeReviewFlags(editedDraft);
+    const normalized = this._markExisting(merchantId, recomputeReviewFlags(editedDraft));
     const status = draftHasReviewItems(normalized) ? "REVIEW_REQUIRED" : "DRAFT";
     return this.repos.menuImports.setDraft(importId, status, normalized);
   }
 
-  approveImport(merchantId, importId) {
+  approveImport(merchantId, importId, { by = null } = {}) {
     const record = this._ownedImport(merchantId, importId);
     if (!PRE_APPROVAL_STATUSES.has(record.status)) {
       throw importError("INVALID_IMPORT_STATE", `Cannot approve import ${importId} in status ${record.status}`, 409);
@@ -211,21 +227,21 @@ export class MenuImportService {
     }
 
     const approved = this.repos.menuImports.setStatus(importId, "APPROVED");
-    this._audit(merchantId, importId, "MENU_IMPORT_APPROVED", { sourceType: record.source_type });
+    this._audit(merchantId, importId, "MENU_IMPORT_APPROVED", { sourceType: record.source_type, by });
     return approved;
   }
 
-  rejectImport(merchantId, importId, reason) {
+  rejectImport(merchantId, importId, reason, { by = null } = {}) {
     const record = this._ownedImport(merchantId, importId);
     if (!PRE_APPROVAL_STATUSES.has(record.status)) {
       throw importError("INVALID_IMPORT_STATE", `Cannot reject import ${importId} in status ${record.status}`, 409);
     }
     const rejected = this.repos.menuImports.setRejected(importId, reason);
-    this._audit(merchantId, importId, "MENU_IMPORT_REJECTED", { sourceType: record.source_type, reason });
+    this._audit(merchantId, importId, "MENU_IMPORT_REJECTED", { sourceType: record.source_type, reason, by });
     return rejected;
   }
 
-  publishImport(merchantId, importId) {
+  publishImport(merchantId, importId, { by = null } = {}) {
     const record = this._ownedImport(merchantId, importId);
     if (record.status === "PUBLISHED") {
       throw importError("ALREADY_PUBLISHED", `Import ${importId} was already published`, 409);
@@ -238,8 +254,10 @@ export class MenuImportService {
     // the transaction and the publish itself (spec §20, never bypassed).
     this.menuService.applyPublishedDraft(merchantId, record.draft);
 
+    // provenance: which existing dishes changed price, from what to what (merchant-scoped, per import)
+    const priceChanges = (record.draft?.categories || []).flatMap((c) => (c.products || []).filter((p) => p.existing_product_id != null && !p.needs_review && p.price !== p.previous_price).map((p) => ({ productId: p.existing_product_id, name: p.name, before: p.previous_price, after: p.price })));
     const published = this.repos.menuImports.setStatus(importId, "PUBLISHED");
-    this._audit(merchantId, importId, "MENU_IMPORT_PUBLISHED", { sourceType: record.source_type });
+    this._audit(merchantId, importId, "MENU_IMPORT_PUBLISHED", { sourceType: record.source_type, by, priceChanges });
     return published;
   }
 }

@@ -13,9 +13,38 @@
  * the concierge layer a single, small, tool-call-shaped surface.
  */
 export class AgentSearchService {
-  constructor({ discovery, registry }) {
+  // foodKnowledge (optional, read-only): present only when
+  // FOOD_KNOWLEDGE_DISCOVERY_ENABLED=true — see services/foodKnowledgeAdapter.js.
+  // Without it every method behaves exactly as before.
+  constructor({ discovery, registry, foodKnowledge = null }) {
     this.discovery = discovery;
     this.registry = registry;
+    this.foodKnowledge = foodKnowledge;
+  }
+
+  /**
+   * Food Knowledge discovery (reference data: dishes, merchants, recorded
+   * prices/ratings/locations with sources). Never creates a cart or an order;
+   * "orderable" is decided by the platform catalog inside the adapter.
+   * @returns {{enabled: false} | {enabled: true, result: object, answer: string}}
+   */
+  searchFoodKnowledge(text, opts = {}) {
+    if (!this.foodKnowledge) return { enabled: false };
+    return { enabled: true, ...this.foodKnowledge.search(text, opts) };
+  }
+
+  foodKnowledgeEnabled() {
+    return Boolean(this.foodKnowledge);
+  }
+
+  /** Follow-up about a remembered Food Knowledge list; null when the knowledge layer is off. */
+  foodKnowledgeFollowUp(kind, { context, ordinal = null, targetId = null }) {
+    return this.foodKnowledge ? this.foodKnowledge.followUp(kind, { context, ordinal, targetId }) : null;
+  }
+
+  /** Does the message name a dish / place / region of its own (a new question, not a follow-up)? */
+  foodKnowledgeNamesSomething(text) {
+    return this.foodKnowledge ? this.foodKnowledge.namesSomething(text) : false;
   }
 
   /**

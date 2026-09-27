@@ -52,4 +52,19 @@ export class PlatformSessionRepository {
   returnToPlatform(id) {
     return this.update(id, { context: "platform", activeMerchantId: null });
   }
+
+  // Food Knowledge follow-up context (migration 013). Reads/writes only its own column.
+  getKnowledgeContext(id) {
+    const row = this.db.prepare(`SELECT knowledge_context_json FROM platform_sessions WHERE id = ?`).get(id);
+    if (!row?.knowledge_context_json) return null;
+    try {
+      return JSON.parse(row.knowledge_context_json);
+    } catch {
+      return null; // a corrupt blob is "no context", never a crash
+    }
+  }
+
+  setKnowledgeContext(id, context) {
+    this.db.prepare(`UPDATE platform_sessions SET knowledge_context_json = ? WHERE id = ?`).run(context ? JSON.stringify(context) : null, id);
+  }
 }

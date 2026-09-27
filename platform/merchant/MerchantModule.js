@@ -22,7 +22,10 @@ export class MerchantModule {
     throw new Error("not implemented");
   }
 
-  /** @returns {Promise<{name, address, items: Array<{name, price, available}>}>} */
+  /**
+   * @returns {Promise<{name, address, items: Array<{name, price, available}>, categories?: Array<{name, count}>}>}
+   *   `categories` (optional): the menu's categories in order, for browsing a large menu.
+   */
   async getMenuSummary() {
     throw new Error("not implemented");
   }

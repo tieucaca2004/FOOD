@@ -1,0 +1,205 @@
+{
+  "note": "Public 'top quán … Nha Trang' articles on sites the founder listed as permitted (mia.vn, vinwonders.com, vnpay.vn…). Every fetch still obeys robots.txt and stops at login/CAPTCHA/paywall. Platforms known to forbid scraping (Google Maps, Foody, Tripadvisor, ShopeeFood, GrabFood, Facebook) are never listed here. What these pages give: place names, addresses, opening hours and the dishes they say a place serves — as MENTIONS with the article as evidence. Not menus, not ratings; 'Giá tham khảo' ranges are not product prices.",
+  "source_type": "blog",
+  "region_id": "vn.khanh-hoa.nha-trang",
+  "other_localities": [
+    "Cam Ranh",
+    "Ninh Hòa",
+    "Diên Khánh",
+    "Vạn Ninh",
+    "Cam Lâm",
+    "Khánh Vĩnh",
+    "Khánh Sơn",
+    "Vũng Tàu",
+    "Quy Nhơn",
+    "Đà Lạt",
+    "Phan Rang",
+    "Tuy Hòa"
+  ],
+  "articles": [
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/top-nha-hang-nha-trang-20010",
+      "topic": "nhà hàng"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/ngon-nuc-no-mon-bun-ca-nha-trang-788",
+      "topic": "bún cá"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/top-quan-hu-tieu-nha-trang-16166",
+      "topic": "hủ tiếu"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/kham-pha-top-10-quan-lau-nha-trang-ngon-nuc-tieng-666",
+      "topic": "lẩu"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/bo-tui-10-quan-banh-can-nha-trang-ngon-nuc-long-thuc-khach-686",
+      "topic": "bánh căn"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/co-gi-hap-dan-trong-to-banh-canh-cha-ca-nha-trang-790",
+      "topic": "bánh canh chả cá"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/top-10-quan-banh-xeo-muc-nha-trang-thom-ngon-hap-dan-680",
+      "topic": "bánh xèo"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/den-nha-trang-nhat-dinh-phai-an-thu-banh-beo-banh-hoi-dan-da-ngon-me-man-837",
+      "topic": "bánh bèo, bánh hỏi"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/banh-mi-cha-ca-nha-trang-17893",
+      "topic": "bánh mì chả cá"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/top-tiem-banh-mi-nha-trang-ngon-me-ly-15509",
+      "topic": "bánh mì"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/quan-chay-nha-trang-da-an-la-me-15511",
+      "topic": "chay"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/top-quan-an-dem-nha-trang-16078",
+      "topic": "ăn đêm"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/kham-pha-loat-nha-hang-gia-re-nha-trang-gay-an-tuong-boi-khong-gian-va-menu-am-thuc-da-sac-mau-677",
+      "topic": "nhà hàng"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/bo-tui-top-8-nha-hang-view-dep-nha-trang-khien-du-khach-say-long-ngay-lan-dau-tien-den-656",
+      "topic": "nhà hàng"
+    },
+    {
+      "url": "https://mia.vn/cam-nang-du-lich/goi-y-cac-mon-an-sang-nha-trang-15712",
+      "topic": "ăn sáng"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/quan-bun-bo-nha-trang-ngon-huong-vi-dam-da/",
+      "topic": "bún bò"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/bun-bo-hue-nha-trang/",
+      "topic": "bún bò Huế"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/am-bung-voi-22-quan-chao-nha-trang/",
+      "topic": "cháo"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/9-quan-chao-long-nha-trang-ngon/",
+      "topic": "cháo lòng"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/diem-ten-list-quan-hu-tieu-nha-trang-ngon-dam-vi/",
+      "topic": "hủ tiếu"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/bo-tui-17-dia-chi-an-vat-nha-trang-ngon-bo-re-noi-tieng-nhat/",
+      "topic": "ăn vặt"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/can-quet-14-quan-nuong-nha-trang-thom-ngon/",
+      "topic": "nướng"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/10-quan-banh-canh-nha-trang/",
+      "topic": "bánh canh"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/bo-tui-7-quan-banh-can-nha-trang/",
+      "topic": "bánh căn"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/10-quan-banh-xeo-nha-trang/",
+      "topic": "bánh xèo"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/dia-diem-thuong-thuc-nem-lui-nha-trang/",
+      "topic": "nem lụi"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/quan-hai-san-nha-trang-ngon/",
+      "topic": "hải sản"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/hai-san-bo-ke-nha-trang/",
+      "topic": "hải sản"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/toplist-25-quan-oc-nha-trang/",
+      "topic": "ốc"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/top-16-quan-com-ngon-nha-trang/",
+      "topic": "cơm"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/quan-nhau-nha-trang/",
+      "topic": "quán nhậu"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/24-quan-an-nha-trang/",
+      "topic": "quán ăn"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/nha-trang-an-gi-kham-pha-mon-ngon/",
+      "topic": "quán ăn"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/30-nha-hang-nha-trang-ngon-view-dep/",
+      "topic": "nhà hàng"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/an-sang-nha-trang-o-dau-luu-ngay-20-dia-diem-an-ngon-va-noi-tieng/",
+      "topic": "ăn sáng"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/diem-danh-top-15-quan-chay-nha-trang-hut-khach-nhat/",
+      "topic": "chay"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/bun-cha-ca-nha-trang/",
+      "topic": "bún chả cá"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/review-10-quan-bun-sua-nha-trang/",
+      "topic": "bún sứa"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/review-bun-ca-nha-trang/",
+      "topic": "bún cá"
+    },
+    {
+      "url": "https://vinwonders.com/vi/wonderpedia/news/bun-cha-ha-noi-o-nha-trang/",
+      "topic": "bún chả Hà Nội"
+    },
+    {
+      "url": "https://vnpay.vn/an-vat-o-nha-trang-0ocv7zqo35ur",
+      "topic": "ăn vặt"
+    },
+    {
+      "url": "https://pasgo.vn/blog/tan-huong-hai-san-ngon-nha-trang-voi-nhung-dia-chi-noi-tieng-5722",
+      "topic": "pasgo nha trang"
+    },
+    {
+      "url": "https://pasgo.vn/blog/top-quan-buffet-hai-san-ngon-nhat-tai-nha-trang-khong-the-bo-lo-5719",
+      "topic": "pasgo nha trang"
+    },
+    {
+      "url": "https://pasgo.vn/blog/top-nha-hang-ngon-tai-nha-trang-ban-khong-the-bo-qua-5724",
+      "topic": "pasgo nha trang"
+    },
+    {
+      "url": "https://pasgo.vn/blog/quan-ngon-gia-re-binh-dan-tai-nha-trang-ban-nhat-dinh-phai-ghe-5725",
+      "topic": "pasgo nha trang"
+    },
+    {
+      "url": "https://pasgo.vn/blog/trai-nghiem-am-thuc-dinh-cao-tai-cac-nha-hang-sang-trong-nha-trang-5723",
+      "topic": "pasgo nha trang"
+    }
+  ]
+}

@@ -70,6 +70,12 @@ export class MerchantRepository {
   // without going through the legacy status mapping. Does not touch the
   // legacy `status` column — callers relying on that column for other
   // purposes should migrate deliberately, not silently via this method.
+  // This merchant's own address (never another merchant's): the only write path for it.
+  setAddress(merchantId, address) {
+    this.db.prepare(`UPDATE merchants SET address = ?, updated_at = datetime('now') WHERE merchant_id = ?`).run(address, merchantId);
+    return this.getById(merchantId);
+  }
+
   setAccountStatus(merchantId, accountStatus, active) {
     this.db
       .prepare(`UPDATE merchants SET account_status = ?, active = ?, updated_at = datetime('now') WHERE merchant_id = ?`)

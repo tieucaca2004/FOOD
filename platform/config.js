@@ -27,9 +27,55 @@ export const platformConfig = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
 
+  // GPT Food Concierge (OpenAI Responses API + FOOD tool registry + Fact Guard). OFF unless
+  // OPENAI_ENABLED=true AND a key is set; the model comes from OPENAI_MODEL. Deterministic
+  // handling stays the default and the fallback for every failure.
+  openaiEnabled: process.env.OPENAI_ENABLED === "true",
+  openaiApiKey: process.env.OPENAI_API_KEY || "",
+  openaiModel: process.env.OPENAI_MODEL || "gpt-5.6-terra", // configurable; business logic never names a model
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+  openaiTimeoutMs: Number(process.env.OPENAI_TIMEOUT_MS || 15000), // whole turn, all model calls together
+  openaiMaxToolTurns: Number(process.env.OPENAI_MAX_TOOL_TURNS || 6),
+  // stateless calls (store=false); reasoning items are echoed back encrypted between tool turns
+  openaiIncludeReasoning: process.env.OPENAI_INCLUDE_REASONING !== "false",
+
+  // GPT concierge knowledge layers (independent, OFF by default; only used when the GPT concierge is on):
+  // founder guidance (FK-1, APPROVED customer items) and food-name / alias recognition (APPROVED term relations).
+  founderKnowledgeEnabled: process.env.FOUNDER_KNOWLEDGE_ENABLED === "true",
+  foodAliasKnowledgeEnabled: process.env.FOOD_ALIAS_KNOWLEDGE_ENABLED === "true",
+  // structured search intent (dish / place / location / price / follow-up) given to the GPT concierge as context
+  searchIntelligenceEnabled: process.env.SEARCH_INTELLIGENCE_ENABLED === "true",
+
+  // Knowledge Ingestion (Knowledge Group -> evidence -> review). OFF by default. Writes the WORKING
+  // knowledge DB (the collector's), never the runtime snapshot customers read; nothing is published
+  // automatically (review only).
+  knowledgeIngestEnabled: process.env.KNOWLEDGE_INGEST_ENABLED === "true",
+  knowledgeIngestDbPath: process.env.KNOWLEDGE_INGEST_DB_PATH || "./data/normalized/pilot/knowledge.db",
+  knowledgeIngestRawRoot: process.env.KNOWLEDGE_INGEST_RAW_ROOT || "./data/raw",
+  knowledgeGroupChatIds: (process.env.KNOWLEDGE_GROUP_CHAT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),
+
+  // Customer contributions (Multimodal Knowledge Ingestion V1): images / text a CUSTOMER sends in the chat become
+  // evidence -> candidates (unverified) in the same WORKING knowledge DB as the Knowledge Group. OFF by default, and
+  // fail-closed: without a hash key (>= 32 bytes) nothing is stored. Candidates are never published automatically.
+  userContributionsEnabled: process.env.USER_CONTRIBUTIONS_ENABLED === "true",
+  contributorHashKey: process.env.KNOWLEDGE_CONTRIBUTOR_HASH_KEY || "",
+  contributorHashKid: process.env.KNOWLEDGE_CONTRIBUTOR_HASH_KID || "k1",
+  // image reader: "null" (store evidence, read nothing) | "openai"
+  imageUnderstandingProvider: process.env.IMAGE_UNDERSTANDING_PROVIDER || "null",
+  imageUnderstandingModel: process.env.IMAGE_UNDERSTANDING_MODEL || process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
+  imageUnderstandingTimeoutMs: Number(process.env.IMAGE_UNDERSTANDING_TIMEOUT_MS || 45000),
+  contributionMaxImageBytes: Number(process.env.CONTRIBUTION_MAX_IMAGE_BYTES || 10 * 1024 * 1024),
+  contributionMaxImagesPerDay: Number(process.env.CONTRIBUTION_MAX_IMAGES_PER_DAY || 20),
+  contributionMaxImagesPerAlbum: Number(process.env.CONTRIBUTION_MAX_IMAGES_PER_ALBUM || 5),
+  contributionPendingTtlMinutes: Number(process.env.CONTRIBUTION_PENDING_TTL_MINUTES || 30),
+  // Zalo attachment URLs are fetched only from these host suffixes (https only; SSRF guard)
+  zaloMediaHosts: (process.env.ZALO_MEDIA_HOSTS || "zdn.vn,zadn.vn,zalo.me,zaloapp.com").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+
   // Menu Import vision/OCR (Phase 4) — separate toggle from the concierge
   // AI above; tests never depend on either being configured.
-  menuVisionProvider: process.env.MENU_VISION_PROVIDER || "null", // "null" | "anthropic"
+  menuVisionProvider: process.env.MENU_VISION_PROVIDER || "null", // "null" | "anthropic" | "openai"
+  // MENU_VISION_PROVIDER=openai: the model that reads menu photos (default: OPENAI_MODEL); proposal only, never publishes
+  menuVisionOpenAIModel: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
   menuVisionModel: process.env.MENU_VISION_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
   menuImportMaxImageBytes: Number(process.env.MENU_IMPORT_MAX_IMAGE_BYTES || 8 * 1024 * 1024),
   menuImportUploadDir: process.env.MENU_IMPORT_UPLOAD_DIR || "./data/uploads/menu-imports",
@@ -44,6 +90,15 @@ export const platformConfig = {
   orderCodePrefix: process.env.PLATFORM_ORDER_CODE_PREFIX || "TD",
 
   dbPath: process.env.PLATFORM_SQLITE_PATH || "./data/platform.db",
+
+  // Engine serving A Tiểu (ATIEU001) — see platform/db/seed.js. "legacy"
+  // (default, src/ module with its own shop notification) | "generic".
+  atieuEngine: process.env.PLATFORM_ATIEU_ENGINE === "generic" ? "generic" : "legacy",
+
+  // Food Knowledge discovery (read-only, separate knowledge.db). Off by
+  // default: when false the knowledge layer is never even loaded.
+  foodKnowledgeDiscoveryEnabled: process.env.FOOD_KNOWLEDGE_DISCOVERY_ENABLED === "true",
+  knowledgeDbPath: process.env.KNOWLEDGE_SQLITE_PATH || "./data/knowledge/knowledge.db",
 
   // Never hard-code trial length — configurable, applied when a plan row
   // doesn't specify its own trial_days.

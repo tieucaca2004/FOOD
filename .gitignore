@@ -6,3 +6,7 @@ data/*.db-wal
 data/*.db-shm
 data/uploads/
 *.log
+data/raw/
+data/normalized/
+data/knowledge/
+data/backups/

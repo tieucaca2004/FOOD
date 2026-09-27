@@ -1,0 +1,1511 @@
+{
+  "version": 1,
+  "note": "Semantic vocabulary: Vietnamese phrases -> taxonomy concepts. Reviewed configuration. Matching is done on accented text; a term marked ambiguous_unaccented collides with another word once accents are removed (chua/chưa, kho/khô, bò/bỏ…) and only yields an AMBIGUOUS match on unaccented input. A term marked always_ambiguous has another meaning even WITH accents (giá = price, thơm = pineapple) and never counts as evidence on its own. A multi-word term built on such a word inherits the ambiguity on unaccented input unless marked unaccented_safe (a fixed dish name like \"banh mi\"). protected_names also holds phrases that contain an attribute word without meaning it (\"đặc sản\" is not \"đặc\").",
+  "negators": [
+    "không có",
+    "không bị",
+    "không hề",
+    "không",
+    "chẳng",
+    "ko",
+    "hông",
+    "đừng",
+    "khỏi"
+  ],
+  "intensifiers": {
+    "rất": "high",
+    "quá": "high",
+    "cực": "high",
+    "cực kỳ": "high",
+    "siêu": "high",
+    "đậm": "high",
+    "hơi": "low",
+    "nhẹ": "low",
+    "ít": "low",
+    "thoang thoảng": "low",
+    "vừa": "medium",
+    "khá": "medium",
+    "vừa phải": "medium"
+  },
+  "protected_names": [
+    {
+      "text": "cơm nguội",
+      "reason": "tên món, không phải nhiệt độ"
+    },
+    {
+      "text": "bánh bò",
+      "reason": "bánh bò không có thịt bò"
+    },
+    {
+      "text": "bánh da lợn",
+      "reason": "không có da lợn"
+    },
+    {
+      "text": "bò bía",
+      "reason": "không có thịt bò"
+    },
+    {
+      "text": "bánh tai heo",
+      "reason": "không có tai heo"
+    },
+    {
+      "text": "bánh cay",
+      "reason": "tên món, không có nghĩa là cay"
+    },
+    {
+      "text": "bánh bèo",
+      "reason": "không có nghĩa là béo"
+    },
+    {
+      "text": "bánh ngọt",
+      "reason": "tên nhóm bánh"
+    },
+    {
+      "text": "nước mát",
+      "reason": "tên đồ uống, không phải nhiệt độ"
+    },
+    {
+      "text": "đặc sản",
+      "reason": "không phải kết cấu (đặc)"
+    },
+    {
+      "text": "đặc biệt",
+      "reason": "không phải kết cấu (đặc)"
+    },
+    {
+      "text": "đặc trưng",
+      "reason": "không phải kết cấu (đặc)"
+    },
+    {
+      "text": "đặc sắc",
+      "reason": "không phải kết cấu (đặc)"
+    },
+    {
+      "text": "đặc điểm",
+      "reason": "không phải kết cấu (đặc)"
+    },
+    {
+      "text": "đặc thù",
+      "reason": "không phải kết cấu (đặc)"
+    },
+    {
+      "text": "chất béo",
+      "reason": "dinh dưỡng, không phải vị béo"
+    },
+    {
+      "text": "tiết canh",
+      "reason": "tên món, không phải món canh"
+    },
+    {
+      "text": "sữa đặc",
+      "reason": "sữa đặc có đường, không phải kết cấu đặc"
+    },
+    {
+      "text": "nóng sốt",
+      "reason": "thành ngữ “nóng sốt”, không chỉ riêng món"
+    },
+    {
+      "text": "cơm dừa",
+      "reason": "cùi dừa, không phải cơm"
+    },
+    {
+      "text": "diếp cá",
+      "reason": "tên rau, không phải cá"
+    },
+    {
+      "text": "rau diếp cá",
+      "reason": "tên rau, không phải cá"
+    },
+    {
+      "text": "trứng cá",
+      "reason": "trứng cá (so sánh/caviar), không phải cá hay trứng"
+    },
+    {
+      "text": "sữa bò",
+      "reason": "sữa bò (sữa), không phải thịt bò"
+    },
+    {
+      "text": "sữa dê",
+      "reason": "sữa dê, không phải thịt dê"
+    },
+    {
+      "text": "nấm men",
+      "reason": "men (yeast), không phải nấm"
+    },
+    {
+      "text": "thịnh hành",
+      "reason": "phổ biến, không phải hành"
+    },
+    {
+      "text": "hành trình",
+      "reason": "chuyến đi, không phải hành"
+    },
+    {
+      "text": "tiến hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "thực hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "phát hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "ban hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "hành động",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "hành khách",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "vận hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "điều hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "đồng hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "song hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "thi hành",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "hành chính",
+      "reason": "không phải hành"
+    },
+    {
+      "text": "phổ biến",
+      "reason": "không phải phở"
+    },
+    {
+      "text": "lúa mì",
+      "reason": "cây lúa mì (wheat), không phải mì sợi"
+    },
+    {
+      "text": "bột mì",
+      "reason": "bột (flour), không phải mì sợi"
+    },
+    {
+      "text": "pho mát",
+      "reason": "phô mai, không phải phở"
+    },
+    {
+      "text": "gà gô",
+      "reason": "chim gà gô, không phải gà"
+    },
+    {
+      "text": "gà lôi",
+      "reason": "chim trĩ, không phải gà"
+    }
+  ],
+  "out_of_scope": [
+    {
+      "text": "tính nóng",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "tính mát",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "tính hàn",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "tính nhiệt",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "nóng trong người",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "nóng gan",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "giải nhiệt",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "mát gan",
+      "concept": "tcm_nature"
+    },
+    {
+      "text": "thanh nhiệt",
+      "concept": "tcm_nature"
+    }
+  ],
+  "terms": [
+    {
+      "text": "rất nóng",
+      "concept": "temperature.serving",
+      "value": "very_hot"
+    },
+    {
+      "text": "nóng hổi",
+      "concept": "temperature.serving",
+      "value": "very_hot"
+    },
+    {
+      "text": "ăn nóng",
+      "concept": "temperature.serving",
+      "value": "hot"
+    },
+    {
+      "text": "dùng nóng",
+      "concept": "temperature.serving",
+      "value": "hot"
+    },
+    {
+      "text": "nước dùng nóng",
+      "concept": "temperature.serving",
+      "value": "hot"
+    },
+    {
+      "text": "nóng",
+      "senses": [
+        {
+          "concept": "taste.spicy",
+          "level": "high",
+          "when_before": [
+            "vị",
+            "miệng",
+            "lưỡi"
+          ]
+        },
+        {
+          "concept": "temperature.serving",
+          "value": "hot",
+          "default": true
+        }
+      ]
+    },
+    {
+      "text": "ấm",
+      "concept": "temperature.serving",
+      "value": "warm",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "để nguội",
+      "concept": "temperature.serving",
+      "value": "room"
+    },
+    {
+      "text": "ăn nguội",
+      "concept": "temperature.serving",
+      "value": "room"
+    },
+    {
+      "text": "nguội",
+      "concept": "temperature.serving",
+      "value": "room",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "mát",
+      "concept": "temperature.serving",
+      "value": "cool",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "mát (nhiệt độ) / mát (cảm giác, “ăn mát”, tính mát)"
+    },
+    {
+      "text": "mát lạnh",
+      "concept": "temperature.serving",
+      "value": "cold"
+    },
+    {
+      "text": "ướp lạnh",
+      "concept": "temperature.serving",
+      "value": "cold"
+    },
+    {
+      "text": "lạnh",
+      "concept": "temperature.serving",
+      "value": "cold"
+    },
+    {
+      "text": "dùng lạnh",
+      "concept": "temperature.serving",
+      "value": "cold"
+    },
+    {
+      "text": "thêm đá",
+      "concept": "temperature.serving",
+      "value": "iced"
+    },
+    {
+      "text": "có đá",
+      "concept": "temperature.serving",
+      "value": "iced"
+    },
+    {
+      "text": "đá",
+      "concept": "temperature.serving",
+      "value": "iced",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "nóng hoặc đá",
+      "concept": "temperature.serving",
+      "value": "either"
+    },
+    {
+      "text": "nóng hoặc lạnh",
+      "concept": "temperature.serving",
+      "value": "either"
+    },
+    {
+      "text": "cay",
+      "concept": "taste.spicy"
+    },
+    {
+      "text": "cay nhẹ",
+      "concept": "taste.spicy",
+      "level": "low"
+    },
+    {
+      "text": "hơi cay",
+      "concept": "taste.spicy",
+      "level": "low"
+    },
+    {
+      "text": "cay vừa",
+      "concept": "taste.spicy",
+      "level": "medium"
+    },
+    {
+      "text": "cay nồng",
+      "concept": "taste.spicy",
+      "level": "high"
+    },
+    {
+      "text": "cay xé",
+      "concept": "taste.spicy",
+      "level": "high"
+    },
+    {
+      "text": "cay nóng",
+      "concept": "taste.spicy",
+      "level": "high"
+    },
+    {
+      "text": "nóng cay",
+      "concept": "taste.spicy",
+      "level": "high"
+    },
+    {
+      "text": "ớt để riêng",
+      "concept": "taste.spicy",
+      "level": "adjustable"
+    },
+    {
+      "text": "cay tùy chọn",
+      "concept": "taste.spicy",
+      "level": "adjustable"
+    },
+    {
+      "text": "thêm ớt tùy thích",
+      "concept": "taste.spicy",
+      "level": "adjustable"
+    },
+    {
+      "text": "chua cay",
+      "concepts": [
+        {
+          "concept": "taste.sour"
+        },
+        {
+          "concept": "taste.spicy"
+        }
+      ]
+    },
+    {
+      "text": "chua ngọt",
+      "concepts": [
+        {
+          "concept": "taste.sour"
+        },
+        {
+          "concept": "taste.sweet"
+        }
+      ]
+    },
+    {
+      "text": "mặn",
+      "concept": "taste.salty",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "mặn mà",
+      "concept": "taste.salty"
+    },
+    {
+      "text": "ngọt",
+      "concept": "taste.sweet"
+    },
+    {
+      "text": "ngọt thanh",
+      "concepts": [
+        {
+          "concept": "taste.sweet",
+          "level": "low"
+        },
+        {
+          "concept": "taste.light"
+        }
+      ]
+    },
+    {
+      "text": "ngọt béo",
+      "concepts": [
+        {
+          "concept": "taste.sweet"
+        },
+        {
+          "concept": "taste.rich"
+        }
+      ]
+    },
+    {
+      "text": "chua",
+      "concept": "taste.sour",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "chua chua",
+      "concept": "taste.sour",
+      "level": "low"
+    },
+    {
+      "text": "đắng",
+      "concept": "taste.bitter",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "béo",
+      "concept": "taste.rich",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "béo ngậy",
+      "concept": "taste.rich",
+      "level": "high"
+    },
+    {
+      "text": "thơm",
+      "concept": "taste.aromatic",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "thơm (mùi) / quả thơm (dứa)"
+    },
+    {
+      "text": "thơm lừng",
+      "concept": "taste.aromatic",
+      "level": "high"
+    },
+    {
+      "text": "thanh",
+      "concept": "taste.light",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "thanh (vị thanh) / thanh (một thanh kẹo, tên riêng)"
+    },
+    {
+      "text": "vị thanh",
+      "concept": "taste.light"
+    },
+    {
+      "text": "nhạt",
+      "concept": "taste.light",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "đậm đà",
+      "concept": "taste.bold"
+    },
+    {
+      "text": "đậm vị",
+      "concept": "taste.bold"
+    },
+    {
+      "text": "giòn",
+      "concept": "texture.crispy"
+    },
+    {
+      "text": "giòn rụm",
+      "concept": "texture.crispy",
+      "level": "high"
+    },
+    {
+      "text": "giòn tan",
+      "concept": "texture.crispy",
+      "level": "high"
+    },
+    {
+      "text": "giòn ngoài mềm trong",
+      "concept": "texture.crispy_outside_soft_inside"
+    },
+    {
+      "text": "mềm",
+      "concept": "texture.soft"
+    },
+    {
+      "text": "mềm mịn",
+      "concept": "texture.soft"
+    },
+    {
+      "text": "dai",
+      "concept": "texture.chewy",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "dẻo",
+      "concept": "texture.sticky",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "mọng nước",
+      "concept": "texture.juicy"
+    },
+    {
+      "text": "khô",
+      "concept": "texture.dry",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "nhiều nước",
+      "concept": "texture.soupy"
+    },
+    {
+      "text": "sệt",
+      "concept": "texture.thick"
+    },
+    {
+      "text": "đặc",
+      "concept": "texture.thick",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "loãng",
+      "concept": "texture.thin"
+    },
+    {
+      "text": "béo mịn",
+      "concept": "texture.creamy"
+    },
+    {
+      "text": "món nước",
+      "concept": "facet:dish_form",
+      "value": "soup_dish"
+    },
+    {
+      "text": "có nước dùng",
+      "concept": "facet:dish_form",
+      "value": "soup_dish"
+    },
+    {
+      "text": "món khô",
+      "concept": "facet:dish_form",
+      "value": "dry_dish"
+    },
+    {
+      "text": "trộn",
+      "concept": "facet:preparation",
+      "value": "mix",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "trộn (món trộn) / trộn (một bước chế biến)"
+    },
+    {
+      "text": "món cuốn",
+      "concept": "facet:dish_form",
+      "value": "rolled"
+    },
+    {
+      "text": "cháo",
+      "concept": "facet:dish_form",
+      "value": "porridge",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "súp",
+      "concept": "facet:dish_form",
+      "value": "soup"
+    },
+    {
+      "text": "canh",
+      "concept": "facet:dish_form",
+      "value": "canh",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "gỏi",
+      "concept": "facet:dish_form",
+      "value": "salad"
+    },
+    {
+      "text": "lẩu",
+      "concept": "facet:dish_form",
+      "value": "hotpot"
+    },
+    {
+      "text": "đồ uống",
+      "concept": "facet:dish_form",
+      "value": "drink"
+    },
+    {
+      "text": "nước uống",
+      "concept": "facet:dish_form",
+      "value": "drink"
+    },
+    {
+      "text": "chiên",
+      "concept": "facet:preparation",
+      "value": "fry"
+    },
+    {
+      "text": "rán",
+      "concept": "facet:preparation",
+      "value": "fry"
+    },
+    {
+      "text": "chiên giòn",
+      "concept": "facet:preparation",
+      "value": "deep_fry"
+    },
+    {
+      "text": "xào",
+      "concept": "facet:preparation",
+      "value": "stir_fry"
+    },
+    {
+      "text": "nướng",
+      "concept": "facet:preparation",
+      "value": "grill"
+    },
+    {
+      "text": "nướng khuôn",
+      "concept": "facet:preparation",
+      "value": "mold_bake"
+    },
+    {
+      "text": "hấp",
+      "concept": "facet:preparation",
+      "value": "steam"
+    },
+    {
+      "text": "luộc",
+      "concept": "facet:preparation",
+      "value": "boil"
+    },
+    {
+      "text": "kho",
+      "concept": "facet:preparation",
+      "value": "braise",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "hầm",
+      "concept": "facet:preparation",
+      "value": "stew",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "quay",
+      "concept": "facet:preparation",
+      "value": "roast",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "quay (nướng) / quay (xoay, vặn)"
+    },
+    {
+      "text": "áp chảo",
+      "concept": "facet:preparation",
+      "value": "pan_sear"
+    },
+    {
+      "text": "cuốn",
+      "concept": "facet:preparation",
+      "value": "roll",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "cuốn (món cuốn) / cuốn (cuốn sách)"
+    },
+    {
+      "text": "rim",
+      "concept": "facet:preparation",
+      "value": "simmer_glaze"
+    },
+    {
+      "text": "tráng",
+      "concept": "facet:preparation",
+      "value": "griddle_pour",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "ăn sáng",
+      "concept": "facet:meal_period",
+      "value": "breakfast"
+    },
+    {
+      "text": "bữa sáng",
+      "concept": "facet:meal_period",
+      "value": "breakfast"
+    },
+    {
+      "text": "điểm tâm",
+      "concept": "facet:meal_period",
+      "value": "breakfast"
+    },
+    {
+      "text": "ăn trưa",
+      "concept": "facet:meal_period",
+      "value": "lunch"
+    },
+    {
+      "text": "ăn chiều",
+      "concept": "facet:meal_period",
+      "value": "afternoon"
+    },
+    {
+      "text": "ăn tối",
+      "concept": "facet:meal_period",
+      "value": "dinner"
+    },
+    {
+      "text": "ăn khuya",
+      "concept": "facet:meal_period",
+      "value": "late_night"
+    },
+    {
+      "text": "ăn vặt",
+      "concept": "facet:meal_period",
+      "value": "snack"
+    },
+    {
+      "text": "món chính",
+      "concept": "facet:course",
+      "value": "main"
+    },
+    {
+      "text": "món phụ",
+      "concept": "facet:course",
+      "value": "side"
+    },
+    {
+      "text": "ăn kèm",
+      "concept": "facet:course",
+      "value": "side"
+    },
+    {
+      "text": "khai vị",
+      "concept": "facet:course",
+      "value": "appetizer"
+    },
+    {
+      "text": "tráng miệng",
+      "concept": "facet:course",
+      "value": "dessert"
+    },
+    {
+      "text": "chay",
+      "concept": "facet:dietary",
+      "value": "vegetarian",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "món chay",
+      "concept": "facet:dietary",
+      "value": "vegetarian"
+    },
+    {
+      "text": "thuần chay",
+      "concept": "facet:dietary",
+      "value": "vegan"
+    },
+    {
+      "text": "bánh",
+      "concept": "facet:lexical_family",
+      "value": "banh"
+    },
+    {
+      "text": "bún",
+      "concept": "facet:carb_base",
+      "value": "bun",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "phở",
+      "concept": "facet:carb_base",
+      "value": "pho"
+    },
+    {
+      "text": "mì",
+      "concept": "facet:carb_base",
+      "value": "mi",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "hủ tiếu",
+      "concept": "facet:carb_base",
+      "value": "hu_tieu"
+    },
+    {
+      "text": "bánh canh",
+      "concept": "facet:carb_base",
+      "value": "banh_canh",
+      "unaccented_safe": true
+    },
+    {
+      "text": "miến",
+      "concept": "facet:carb_base",
+      "value": "mien"
+    },
+    {
+      "text": "cơm",
+      "concept": "facet:carb_base",
+      "value": "com",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "xôi",
+      "concept": "facet:carb_base",
+      "value": "xoi"
+    },
+    {
+      "text": "bánh mì",
+      "concept": "facet:carb_base",
+      "value": "banh_mi",
+      "unaccented_safe": true
+    },
+    {
+      "text": "bánh tráng",
+      "concept": "facet:carb_base",
+      "value": "banh_trang",
+      "unaccented_safe": true
+    },
+    {
+      "text": "bánh hỏi",
+      "concept": "facet:carb_base",
+      "value": "banh_hoi"
+    },
+    {
+      "text": "bột gạo",
+      "concept": "facet:dough_base",
+      "value": "rice_flour"
+    },
+    {
+      "text": "bột mì",
+      "concept": "facet:dough_base",
+      "value": "wheat_flour"
+    },
+    {
+      "text": "bột năng",
+      "concept": "facet:dough_base",
+      "value": "tapioca_starch"
+    },
+    {
+      "text": "bột nếp",
+      "concept": "facet:dough_base",
+      "value": "glutinous_rice_flour"
+    },
+    {
+      "text": "bò",
+      "concept": "ingredient",
+      "value": "protein.beef",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "thịt bò",
+      "concept": "ingredient",
+      "value": "protein.beef"
+    },
+    {
+      "text": "heo",
+      "concept": "ingredient",
+      "value": "protein.pork"
+    },
+    {
+      "text": "lợn",
+      "concept": "ingredient",
+      "value": "protein.pork"
+    },
+    {
+      "text": "thịt heo",
+      "concept": "ingredient",
+      "value": "protein.pork"
+    },
+    {
+      "text": "gà",
+      "concept": "ingredient",
+      "value": "protein.chicken",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "vịt",
+      "concept": "ingredient",
+      "value": "protein.duck"
+    },
+    {
+      "text": "trứng",
+      "concept": "ingredient",
+      "value": "protein.egg"
+    },
+    {
+      "text": "đậu hũ",
+      "concept": "ingredient",
+      "value": "protein.tofu"
+    },
+    {
+      "text": "đậu phụ",
+      "concept": "ingredient",
+      "value": "protein.tofu"
+    },
+    {
+      "text": "hải sản",
+      "concept": "ingredient",
+      "value": "protein.seafood"
+    },
+    {
+      "text": "cá",
+      "concept": "ingredient",
+      "value": "protein.seafood.fish",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "chả cá",
+      "concept": "ingredient",
+      "value": "protein.seafood.fish_cake"
+    },
+    {
+      "text": "sứa",
+      "concept": "ingredient",
+      "value": "protein.seafood.jellyfish"
+    },
+    {
+      "text": "tôm",
+      "concept": "ingredient",
+      "value": "protein.seafood.shrimp"
+    },
+    {
+      "text": "cua",
+      "concept": "ingredient",
+      "value": "protein.seafood.crab"
+    },
+    {
+      "text": "ghẹ",
+      "concept": "ingredient",
+      "value": "protein.seafood.swimming_crab"
+    },
+    {
+      "text": "mực",
+      "concept": "ingredient",
+      "value": "protein.seafood.squid"
+    },
+    {
+      "text": "nghêu",
+      "concept": "ingredient",
+      "value": "protein.seafood.clam"
+    },
+    {
+      "text": "sò",
+      "concept": "ingredient",
+      "value": "protein.seafood.cockle",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "ốc",
+      "concept": "ingredient",
+      "value": "protein.seafood.snail"
+    },
+    {
+      "text": "rau",
+      "concept": "ingredient",
+      "value": "vegetable"
+    },
+    {
+      "text": "rau thơm",
+      "concept": "ingredient",
+      "value": "vegetable.herb"
+    },
+    {
+      "text": "ngò",
+      "concept": "ingredient",
+      "value": "vegetable.herb.cilantro"
+    },
+    {
+      "text": "rau mùi",
+      "concept": "ingredient",
+      "value": "vegetable.herb.cilantro"
+    },
+    {
+      "text": "hành",
+      "concept": "ingredient",
+      "value": "vegetable.onion",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "hành lá",
+      "concept": "ingredient",
+      "value": "vegetable.onion"
+    },
+    {
+      "text": "tỏi",
+      "concept": "ingredient",
+      "value": "vegetable.garlic",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "ớt",
+      "concept": "ingredient",
+      "value": "vegetable.chili"
+    },
+    {
+      "text": "giá",
+      "concept": "ingredient",
+      "value": "vegetable.bean_sprout",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "giá đỗ / giá tiền"
+    },
+    {
+      "text": "nấm",
+      "concept": "ingredient",
+      "value": "vegetable.mushroom",
+      "ambiguous_unaccented": true
+    },
+    {
+      "text": "đậu phộng",
+      "concept": "ingredient",
+      "value": "nut.peanut"
+    },
+    {
+      "text": "lạc",
+      "concept": "ingredient",
+      "value": "nut.peanut",
+      "ambiguous_unaccented": true,
+      "always_ambiguous": "đậu phộng / bị lạc"
+    },
+    {
+      "text": "phô mai",
+      "concept": "ingredient",
+      "value": "dairy.cheese"
+    },
+    {
+      "text": "nước mắm",
+      "concept": "ingredient",
+      "value": "condiment.fish_sauce"
+    },
+    {
+      "text": "mắm tôm",
+      "concept": "ingredient",
+      "value": "condiment.shrimp_paste"
+    },
+    {
+      "text": "sa tế",
+      "concept": "ingredient",
+      "value": "condiment.satay"
+    },
+    {
+      "text": "ẩm thực Việt Nam",
+      "concept": "facet:cuisine",
+      "value": "vietnamese"
+    },
+    {
+      "text": "món ăn Việt Nam",
+      "concept": "facet:cuisine",
+      "value": "vietnamese"
+    },
+    {
+      "text": "ẩm thực Trung Hoa",
+      "concept": "facet:cuisine",
+      "value": "chinese"
+    },
+    {
+      "text": "ẩm thực Trung Quốc",
+      "concept": "facet:cuisine",
+      "value": "chinese"
+    },
+    {
+      "text": "món ăn Trung Quốc",
+      "concept": "facet:cuisine",
+      "value": "chinese"
+    },
+    {
+      "text": "món Hoa",
+      "concept": "facet:cuisine",
+      "value": "chinese"
+    },
+    {
+      "text": "ẩm thực Nhật Bản",
+      "concept": "facet:cuisine",
+      "value": "japanese"
+    },
+    {
+      "text": "món Nhật",
+      "concept": "facet:cuisine",
+      "value": "japanese"
+    },
+    {
+      "text": "ẩm thực Hàn Quốc",
+      "concept": "facet:cuisine",
+      "value": "korean"
+    },
+    {
+      "text": "món Hàn",
+      "concept": "facet:cuisine",
+      "value": "korean"
+    },
+    {
+      "text": "ẩm thực Thái Lan",
+      "concept": "facet:cuisine",
+      "value": "thai"
+    },
+    {
+      "text": "món Thái",
+      "concept": "facet:cuisine",
+      "value": "thai"
+    },
+    {
+      "text": "buổi sáng",
+      "concept": "facet:meal_period",
+      "value": "breakfast"
+    },
+    {
+      "text": "buổi trưa",
+      "concept": "facet:meal_period",
+      "value": "lunch"
+    },
+    {
+      "text": "buổi chiều",
+      "concept": "facet:meal_period",
+      "value": "afternoon"
+    },
+    {
+      "text": "buổi tối",
+      "concept": "facet:meal_period",
+      "value": "dinner"
+    },
+    {
+      "text": "bữa trưa",
+      "concept": "facet:meal_period",
+      "value": "lunch"
+    },
+    {
+      "text": "bữa tối",
+      "concept": "facet:meal_period",
+      "value": "dinner"
+    },
+    {
+      "text": "trứng gà",
+      "concept": "ingredient",
+      "value": "protein.egg"
+    },
+    {
+      "text": "trứng vịt",
+      "concept": "ingredient",
+      "value": "protein.egg"
+    },
+    {
+      "text": "trứng cút",
+      "concept": "ingredient",
+      "value": "protein.egg"
+    },
+    {
+      "text": "trứng muối",
+      "concept": "ingredient",
+      "value": "protein.egg"
+    },
+    {
+      "text": "món trộn",
+      "concept": "facet:preparation",
+      "value": "mix"
+    },
+    {
+      "text": "gạo nếp",
+      "concept": "ingredient",
+      "value": "grain.glutinous_rice"
+    },
+    {
+      "text": "gạo tấm",
+      "concept": "ingredient",
+      "value": "grain.rice"
+    },
+    {
+      "text": "được cuốn",
+      "concept": "facet:preparation",
+      "value": "roll"
+    },
+    {
+      "text": "hột gà",
+      "concept": "ingredient",
+      "value": "protein.egg"
+    },
+    {
+      "text": "hột vịt",
+      "concept": "ingredient",
+      "value": "protein.egg"
+    },
+    {
+      "text": "có nước",
+      "concept": "facet:dish_form",
+      "value": "soup_dish"
+    },
+    {
+      "text": "món có nước",
+      "concept": "facet:dish_form",
+      "value": "soup_dish"
+    },
+    {
+      "text": "nước lèo",
+      "concept": "facet:dish_form",
+      "value": "soup_dish"
+    },
+    {
+      "text": "món Trung Hoa",
+      "concept": "facet:cuisine",
+      "value": "chinese"
+    },
+    {
+      "text": "món Trung Quốc",
+      "concept": "facet:cuisine",
+      "value": "chinese"
+    },
+    {
+      "text": "đồ ăn Trung Hoa",
+      "concept": "facet:cuisine",
+      "value": "chinese"
+    },
+    {
+      "text": "món Nhật Bản",
+      "concept": "facet:cuisine",
+      "value": "japanese"
+    },
+    {
+      "text": "đồ Nhật",
+      "concept": "facet:cuisine",
+      "value": "japanese"
+    },
+    {
+      "text": "món Hàn Quốc",
+      "concept": "facet:cuisine",
+      "value": "korean"
+    },
+    {
+      "text": "đồ Hàn",
+      "concept": "facet:cuisine",
+      "value": "korean"
+    },
+    {
+      "text": "món Thái Lan",
+      "concept": "facet:cuisine",
+      "value": "thai"
+    },
+    {
+      "text": "món Việt",
+      "concept": "facet:cuisine",
+      "value": "vietnamese"
+    },
+    {
+      "text": "món Âu",
+      "concept": "facet:cuisine",
+      "value": "western"
+    },
+    {
+      "text": "món Ý",
+      "concept": "facet:cuisine",
+      "value": "italian"
+    },
+    {
+      "text": "món Tây",
+      "concept": "facet:cuisine",
+      "value": "western"
+    },
+    {
+      "text": "đồ Tây",
+      "concept": "facet:cuisine",
+      "value": "western"
+    },
+    {
+      "text": "ẩm thực Âu",
+      "concept": "facet:cuisine",
+      "value": "western"
+    },
+    {
+      "text": "món Âu Mỹ",
+      "concept": "facet:cuisine",
+      "value": "western"
+    },
+    {
+      "text": "ẩm thực Ý",
+      "concept": "facet:cuisine",
+      "value": "italian"
+    },
+    {
+      "text": "đồ Ý",
+      "concept": "facet:cuisine",
+      "value": "italian"
+    },
+    {
+      "text": "món Pháp",
+      "concept": "facet:cuisine",
+      "value": "french"
+    },
+    {
+      "text": "ẩm thực Pháp",
+      "concept": "facet:cuisine",
+      "value": "french"
+    },
+    {
+      "text": "đồ Pháp",
+      "concept": "facet:cuisine",
+      "value": "french"
+    },
+    {
+      "text": "món Mỹ",
+      "concept": "facet:cuisine",
+      "value": "american"
+    },
+    {
+      "text": "ẩm thực Mỹ",
+      "concept": "facet:cuisine",
+      "value": "american"
+    },
+    {
+      "text": "đồ Mỹ",
+      "concept": "facet:cuisine",
+      "value": "american"
+    },
+    {
+      "text": "món Nga",
+      "concept": "facet:cuisine",
+      "value": "russian"
+    },
+    {
+      "text": "ẩm thực Nga",
+      "concept": "facet:cuisine",
+      "value": "russian"
+    },
+    {
+      "text": "đồ Nga",
+      "concept": "facet:cuisine",
+      "value": "russian"
+    },
+    {
+      "text": "món Địa Trung Hải",
+      "concept": "facet:cuisine",
+      "value": "mediterranean"
+    },
+    {
+      "text": "ẩm thực Địa Trung Hải",
+      "concept": "facet:cuisine",
+      "value": "mediterranean"
+    },
+    {
+      "text": "món Mexico",
+      "concept": "facet:cuisine",
+      "value": "mexican"
+    },
+    {
+      "text": "ẩm thực Mexico",
+      "concept": "facet:cuisine",
+      "value": "mexican"
+    },
+    {
+      "text": "món Mễ",
+      "concept": "facet:cuisine",
+      "value": "mexican"
+    },
+    {
+      "text": "món Ấn",
+      "concept": "facet:cuisine",
+      "value": "indian"
+    },
+    {
+      "text": "món Ấn Độ",
+      "concept": "facet:cuisine",
+      "value": "indian"
+    },
+    {
+      "text": "ẩm thực Ấn Độ",
+      "concept": "facet:cuisine",
+      "value": "indian"
+    },
+    {
+      "text": "đồ Ấn",
+      "concept": "facet:cuisine",
+      "value": "indian"
+    },
+    {
+      "text": "món Campuchia",
+      "concept": "facet:cuisine",
+      "value": "cambodian"
+    },
+    {
+      "text": "ẩm thực Campuchia",
+      "concept": "facet:cuisine",
+      "value": "cambodian"
+    },
+    {
+      "text": "món Khmer",
+      "concept": "facet:cuisine",
+      "value": "cambodian"
+    },
+    {
+      "text": "món Malaysia",
+      "concept": "facet:cuisine",
+      "value": "malaysian_singaporean"
+    },
+    {
+      "text": "món Singapore",
+      "concept": "facet:cuisine",
+      "value": "malaysian_singaporean"
+    },
+    {
+      "text": "ẩm thực Malaysia",
+      "concept": "facet:cuisine",
+      "value": "malaysian_singaporean"
+    },
+    {
+      "text": "ẩm thực Singapore",
+      "concept": "facet:cuisine",
+      "value": "malaysian_singaporean"
+    },
+    {
+      "text": "món Đài Loan",
+      "concept": "facet:cuisine",
+      "value": "taiwanese"
+    },
+    {
+      "text": "ẩm thực Đài Loan",
+      "concept": "facet:cuisine",
+      "value": "taiwanese"
+    },
+    {
+      "text": "món Trung Đông",
+      "concept": "facet:cuisine",
+      "value": "middle_eastern"
+    },
+    {
+      "text": "ẩm thực Trung Đông",
+      "concept": "facet:cuisine",
+      "value": "middle_eastern"
+    },
+    {
+      "text": "đồ Thái",
+      "concept": "facet:cuisine",
+      "value": "thai"
+    }
+  ]
+}

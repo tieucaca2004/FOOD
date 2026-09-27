@@ -1,5 +1,6 @@
 import { normalizeZaloTextEvent } from "../../src/channel/zalo/messageNormalizer.js"; // generic, read-only reuse
 import { sendPlatformTextMessage } from "./zaloClient.js";
+import { fromZaloEvent } from "./inboundMessage.js";
 import { logger } from "../../src/logger.js";
 
 const INTENT_TO_EVENT = {
@@ -8,11 +9,18 @@ const INTENT_TO_EVENT = {
   confirm_order: "ORDER_CREATED",
 };
 
-export function createPlatformWebhookHandler({ repos, services, router }) {
+export function createPlatformWebhookHandler({ repos, services, router, contributions = false }) {
   return async function handlePlatformWebhook(req, res) {
     const requestId = req.requestId;
 
-    const event = normalizeZaloTextEvent(req.body);
+    let event = normalizeZaloTextEvent(req.body);
+    // Customer contributions (USER_CONTRIBUTIONS_ENABLED): user_send_image (and unsupported media) -> the same
+    // normalised shape as Telegram; the router wrapper answers it. Text events are unchanged.
+    let inbound = null;
+    if (!event && contributions) {
+      inbound = fromZaloEvent(req.body);
+      if (inbound) event = { zaloUserId: inbound.externalUserId, text: inbound.text ?? "", messageId: inbound.messageId, displayName: inbound.displayName, timestamp: inbound.timestamp };
+    }
     if (!event) {
       return res.json({ status: "ignored", event_name: req.body?.event_name || null });
     }
@@ -31,14 +39,14 @@ export function createPlatformWebhookHandler({ repos, services, router }) {
     try {
       const customer = services.customers.getOrCreateByZaloUserId(event.zaloUserId, event.displayName);
       const session = services.sessions.getOrCreate(customer.id);
-      repos.messages.log({ sessionId: session.id, direction: "in", rawText: event.text });
+      repos.messages.log({ sessionId: session.id, direction: "in", rawText: inbound ? `[${inbound.attachments.length ? "ảnh" : inbound.unsupported}]${inbound.text ? ` ${inbound.text}` : ""}` : event.text });
 
-      const result = await router.handle({ customer, session, text: event.text });
-      repos.messages.log({ sessionId: session.id, direction: "out", rawText: result.replyText });
+      const result = await router.handle({ customer, session, text: event.text, ...(inbound && { inbound }) });
+      if (!inbound || result.replyText) repos.messages.log({ sessionId: session.id, direction: "out", rawText: result.replyText });
 
       logFunnelEvents(repos, customer, result);
 
-      const sendResult = await sendPlatformTextMessage(event.zaloUserId, result.replyText);
+      const sendResult = inbound && !result.replyText ? { ok: true } : await sendPlatformTextMessage(event.zaloUserId, result.replyText);
 
       responsePayload = {
         status: "processed",

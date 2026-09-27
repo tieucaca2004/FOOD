@@ -15,6 +15,11 @@ import { PlatformOrderRepository } from "./orderRepository.js";
 import { PaymentRepository } from "./paymentRepository.js";
 import { DeliveryRepository } from "./deliveryRepository.js";
 import { MerchantUserRepository } from "./merchantUserRepository.js";
+import { ConversationStateRepository } from "./conversationStateRepository.js";
+import { CartCheckoutRepository } from "./cartCheckoutRepository.js";
+import { ProductAliasRepository } from "./productAliasRepository.js";
+import { CustomerMemoryRepository } from "./customerMemoryRepository.js";
+import { MerchantDispatchRepository } from "./merchantDispatchRepository.js";
 
 export function createPlatformRepositories(db) {
   return {
@@ -35,5 +40,10 @@ export function createPlatformRepositories(db) {
     payments: new PaymentRepository(db),
     deliveries: new DeliveryRepository(db),
     merchantUsers: new MerchantUserRepository(db), // Phase 7: merchant authentication identity anchor
+    conversationStates: new ConversationStateRepository(db), // Conversational Ordering Engine working memory
+    cartCheckout: new CartCheckoutRepository(db), // delivery address / pickup / phone / note per cart
+    productAliases: new ProductAliasRepository(db), // learned customer language per merchant product
+    customerMemory: new CustomerMemoryRepository(db), // preferences, addresses, order references per customer
+    merchantDispatch: new MerchantDispatchRepository(db), // per-merchant dispatch channel + per-order delivery records
   };
 }

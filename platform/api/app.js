@@ -14,7 +14,7 @@ import { sanitizeWebhookErrors } from "./middleware/sanitizeWebhookErrors.js";
 import { createTelegramWebhookHandler } from "../channel/telegramWebhookController.js";
 import { telegramWebhookSecurity } from "./middleware/telegramWebhookSecurity.js";
 
-export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router }) {
+export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router, knowledgeIngest = null, contributions = false }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -35,12 +35,12 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
   app.use("/api/platform", merchantOrderRoutes({ merchantOrderService: services.merchantOrders, merchantAuthService: services.merchantAuth }));
   app.use("/api/platform", searchRoutes(discovery));
 
-  app.post(platformConfig.webhookPath, zaloWebhookSecurity, sanitizeWebhookErrors, createPlatformWebhookHandler({ repos, services, router }));
+  app.post(platformConfig.webhookPath, zaloWebhookSecurity, sanitizeWebhookErrors, createPlatformWebhookHandler({ repos, services, router, contributions }));
   app.post(
     platformConfig.telegramWebhookPath,
     telegramWebhookSecurity,
     sanitizeWebhookErrors,
-    createTelegramWebhookHandler({ repos, services, router })
+    createTelegramWebhookHandler({ repos, services, router, knowledgeIngest, contributions })
   );
 
   app.use(platformNotFound);

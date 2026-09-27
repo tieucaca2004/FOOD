@@ -13,6 +13,7 @@ export class PlatformSessionService {
 
   enterMerchantContext(sessionId, merchantId, { entrySource, searchQuery, selectedProductRef } = {}) {
     const session = this.repos.sessions.enterMerchantContext(sessionId, merchantId);
+    this.repos.sessions.setKnowledgeContext(sessionId, null); // a merchant is now the subject, not a reference list
     this.repos.merchantSessions.open({
       platformSessionId: sessionId,
       merchantId,
@@ -21,6 +22,14 @@ export class PlatformSessionService {
       selectedProductRef,
     });
     return session;
+  }
+
+  getKnowledgeContext(sessionId) {
+    return this.repos.sessions.getKnowledgeContext(sessionId);
+  }
+
+  setKnowledgeContext(sessionId, context) {
+    this.repos.sessions.setKnowledgeContext(sessionId, context);
   }
 
   returnToPlatform(sessionId) {

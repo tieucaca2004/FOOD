@@ -71,4 +71,17 @@ export class MerchantService {
   close(merchantId) {
     return this.repos.merchants.setStatus(merchantId, MERCHANT_STATUS.CLOSED);
   }
+
+  // A merchant's own address, changed by a named person (admin / owner), with the old and new value recorded
+  // (merchant_events) — the address a customer is told is always this merchant's own row.
+  updateAddress(merchantId, address, { by }) {
+    const merchant = this.repos.merchants.getById(merchantId);
+    if (!merchant) throw new MerchantOnboardingError("MERCHANT_NOT_FOUND", "merchant not found");
+    if (!by || /^(?:ai|gpt|llm|bot|system|auto)(?:[:\s_-]|$)/i.test(String(by).trim())) throw new MerchantOnboardingError("PERSON_REQUIRED", "an address change is made by a named person");
+    const next = String(address ?? "").trim();
+    if (next.length < 5) throw new MerchantOnboardingError("INVALID_INPUT", "address is too short");
+    const updated = this.repos.merchants.setAddress(merchantId, next);
+    this.repos.analytics.logMerchantEvent({ merchantId, eventType: "MERCHANT_ADDRESS_UPDATED", externalRef: null, payload: { before: merchant.address ?? null, after: next, by } });
+    return updated;
+  }
 }

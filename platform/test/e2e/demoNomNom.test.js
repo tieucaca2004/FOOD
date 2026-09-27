@@ -186,14 +186,22 @@ test("ORDER FLOW: find, select, menu, add '3 cheeses Pizza' + 'Greek Salad', vie
     assert.match(reply, /2 × Greek Salad - Salad Hy Lạp = 130\.000đ/);
     assert.match(reply, /Tạm tính: 230\.000đ/);
 
-    // 9. "Đặt hàng" shows the final summary; "Xác nhận" places it
+    // 9. "Đặt hàng" shows the summary and asks how to receive it (an order
+    // must say delivery or pickup); the address shows the final summary;
+    // "Xác nhận" places it.
     reply = await say("Đặt hàng");
     assert.match(reply, /kiểm tra lại đơn/);
     assert.match(reply, /Tạm tính: 230\.000đ/);
+    assert.match(reply, /cho em xin địa chỉ giao hàng/);
+    assert.equal(demoOrderCount(platform), 0);
+    reply = await say("Giao tới 7 Nguyễn Thiện Thuật");
+    assert.match(reply, /📍 Giao tới: 7 Nguyễn Thiện Thuật/);
+    assert.match(reply, /xác nhận đặt đơn này/);
     assert.equal(demoOrderCount(platform), 0);
     reply = await say("Xác nhận");
     assert.match(reply, /✅ Đã tạo đơn TD-\d{8}-\d+/);
     assert.match(reply, /Tổng: 230\.000đ/);
+    assert.match(reply, /📍 Giao tới: 7 Nguyễn Thiện Thuật/);
     assert.match(reply, /CHƯA được gửi tới quán/);
 
     // 10. the order: demo merchant, this customer, never dispatched
@@ -212,6 +220,10 @@ test("ORDER FLOW: find, select, menu, add '3 cheeses Pizza' + 'Greek Salad', vie
       ]
     );
     assert.equal(count(platform.db, `SELECT COUNT(*) AS n FROM orders WHERE merchant_id = 'ATIEU001'`), 0);
+    // the delivery address travels with the order through orders.cart_id
+    const checkout = platform.repos.cartCheckout.getByCart(order.cart_id);
+    assert.equal(checkout.fulfillment_type, "delivery");
+    assert.equal(checkout.delivery_address, "7 Nguyễn Thiện Thuật");
   });
 });
 
@@ -228,6 +240,10 @@ test("ORDER safety: a bare 'xác nhận' never orders without a summary; a cart 
     assert.match(reply, /Garlic Bread/);
     assert.equal(demoOrderCount(platform), 0);
 
+    // still no delivery/pickup choice -> "chốt đơn" only asks for it
+    assert.match(await say("Chốt đơn"), /cho em xin địa chỉ giao hàng/);
+    assert.equal(demoOrderCount(platform), 0);
+    assert.match(await say("Lấy tại quán"), /🏪 Nhận tại quán[\s\S]*xác nhận đặt đơn này/);
     assert.match(await say("Chốt đơn"), /Tổng: 100\.000đ/);
     assert.equal(demoOrderCount(platform), 1);
   });
@@ -265,8 +281,12 @@ test("ISOLATION: customer A and B never see each other's cart or order", async (
     assert.doesNotMatch(cartB, /Greek Salad/);
 
     await say("Đặt hàng", A);
-    await say("Xác nhận", A);
+    await say("Giao tới 7 Nguyễn Thiện Thuật", A);
     await say("Đặt hàng", B);
+    // B never sees A's address
+    const summaryB = await say("Lấy tại quán", B);
+    assert.doesNotMatch(summaryB, /Nguyễn Thiện Thuật/);
+    await say("Xác nhận", A);
     await say("Xác nhận", B);
 
     const { cart, orders } = platform.services;

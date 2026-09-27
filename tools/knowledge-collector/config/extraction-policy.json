@@ -1,0 +1,21 @@
+{
+  "note": "Which lexicon-scan proposals may be published automatically once the validator verifies their evidence, and which always go to review (proposed with extraction \"rule\"). A founder-approved RULE, not a per-record decision. Measured on the pilot (manual audit of random published samples): ingredients ~88%, facets ~88%, sensory attributes (taste / texture / serving temperature) ~50% correct — so sensory attributes found by scanning prose are review-only until a better extractor or a better source (e.g. the merchant's own menu wording) raises that. A fact is auto-published only when at least min_supporting_sentences different sentences of the source state it (a single mention — a metaphor, a compound word, a passing list — goes to review).",
+  "auto_publish": {
+    "ingredient": false,
+    "facet": false,
+    "relation": true,
+    "attribute": false
+  },
+  "min_supporting_sentences": 2,
+  "measurements": [
+    {
+      "date": "2026-09-26",
+      "sample": "100 random published facts after the Wikipedia category expansion (1,334 articles)",
+      "relation": "~95%",
+      "ingredient": "~91%",
+      "facet": "~86%",
+      "overall": "~90%",
+      "decision": "below the 95% target -> facets and ingredients from encyclopedia prose are review-only; relations stay automatic"
+    }
+  ]
+}

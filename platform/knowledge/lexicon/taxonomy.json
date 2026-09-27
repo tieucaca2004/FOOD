@@ -1,0 +1,1020 @@
+{
+  "version": 2,
+  "note": "Generic food taxonomy (Vietnam-first, not region-specific). Reviewed configuration — changes need founder approval. Keys are stable identifiers; label_vi is display text.",
+  "levels": [
+    "none",
+    "low",
+    "medium",
+    "high",
+    "varies",
+    "adjustable"
+  ],
+  "scopes": [
+    "typical",
+    "variant",
+    "region"
+  ],
+  "name_kinds": [
+    "canonical",
+    "alias",
+    "no_accent",
+    "misspelling",
+    "regional",
+    "english"
+  ],
+  "source_types": {
+    "merchant_official": {
+      "tier": 0.9,
+      "label_vi": "website/menu chính thức của quán",
+      "quality_tier": 1
+    },
+    "merchant_social": {
+      "tier": 0.8,
+      "label_vi": "trang mạng xã hội chính thức của quán",
+      "quality_tier": 1
+    },
+    "maps_business": {
+      "tier": 0.75,
+      "label_vi": "thông tin doanh nghiệp trên bản đồ",
+      "quality_tier": 3
+    },
+    "encyclopedia": {
+      "tier": 0.75,
+      "label_vi": "bách khoa / sách ẩm thực",
+      "quality_tier": 3
+    },
+    "publication": {
+      "tier": 0.65,
+      "label_vi": "báo / tạp chí uy tín",
+      "quality_tier": 3
+    },
+    "directory": {
+      "tier": 0.6,
+      "label_vi": "danh bạ / directory",
+      "quality_tier": 4
+    },
+    "osm": {
+      "tier": 0.6,
+      "label_vi": "OpenStreetMap",
+      "requires_license": "ODbL-1.0",
+      "quality_tier": 3
+    },
+    "blog": {
+      "tier": 0.45,
+      "label_vi": "blog cá nhân",
+      "quality_tier": 4
+    },
+    "user_contribution": {
+      "tier": 0.4,
+      "label_vi": "khách hàng gửi qua chat (chưa xác minh)",
+      "quality_tier": 5
+    },
+    "knowledge_group": {
+      "tier": 0.45,
+      "label_vi": "thành viên Knowledge Group FOOD gửi (chưa xác minh)",
+      "quality_tier": 4
+    },
+    "other": {
+      "tier": 0.4,
+      "label_vi": "nguồn công khai khác",
+      "quality_tier": 5
+    },
+    "tourism_official": {
+      "tier": 0.8,
+      "label_vi": "du lịch / cơ quan nhà nước / tổ chức điểm đến chính thức",
+      "quality_tier": 2
+    }
+  },
+  "extraction_adjustments": {
+    "explicit": 0,
+    "curated": 0,
+    "llm_proposal": -0.05,
+    "rule": -0.15
+  },
+  "confidence": {
+    "corroboration_bonus": 0.1,
+    "max": 0.95,
+    "min": 0.05
+  },
+  "excluded_concepts": [
+    {
+      "key": "tcm_nature",
+      "label_vi": "tính nóng / tính mát / tính hàn (Đông y)",
+      "reason": "Ngoài phạm vi Food Intelligence V1 — không suy luận, không trả lời như sự thật."
+    }
+  ],
+  "facets": {
+    "dish_form": {
+      "label_vi": "dạng món",
+      "nodes": [
+        {
+          "key": "soup_dish",
+          "label_vi": "món nước"
+        },
+        {
+          "key": "dry_dish",
+          "label_vi": "món khô / trộn"
+        },
+        {
+          "key": "rolled",
+          "label_vi": "món cuốn"
+        },
+        {
+          "key": "rice_plate",
+          "label_vi": "cơm đĩa / cơm phần"
+        },
+        {
+          "key": "porridge",
+          "label_vi": "cháo"
+        },
+        {
+          "key": "soup",
+          "label_vi": "súp"
+        },
+        {
+          "key": "canh",
+          "label_vi": "canh"
+        },
+        {
+          "key": "salad",
+          "label_vi": "gỏi / nộm"
+        },
+        {
+          "key": "cake_form",
+          "label_vi": "dạng bánh (cái/miếng)"
+        },
+        {
+          "key": "skewer_grill",
+          "label_vi": "đồ nướng xiên / nướng"
+        },
+        {
+          "key": "hotpot",
+          "label_vi": "lẩu"
+        },
+        {
+          "key": "drink",
+          "label_vi": "đồ uống"
+        },
+        {
+          "key": "dessert",
+          "label_vi": "món tráng miệng / chè"
+        }
+      ]
+    },
+    "carb_base": {
+      "label_vi": "tinh bột nền",
+      "nodes": [
+        {
+          "key": "bun",
+          "label_vi": "bún"
+        },
+        {
+          "key": "pho",
+          "label_vi": "phở / bánh phở"
+        },
+        {
+          "key": "mi",
+          "label_vi": "mì"
+        },
+        {
+          "key": "hu_tieu",
+          "label_vi": "hủ tiếu"
+        },
+        {
+          "key": "banh_canh",
+          "label_vi": "sợi bánh canh"
+        },
+        {
+          "key": "mien",
+          "label_vi": "miến"
+        },
+        {
+          "key": "com",
+          "label_vi": "cơm"
+        },
+        {
+          "key": "chao",
+          "label_vi": "cháo"
+        },
+        {
+          "key": "xoi",
+          "label_vi": "xôi"
+        },
+        {
+          "key": "banh_mi",
+          "label_vi": "bánh mì"
+        },
+        {
+          "key": "banh_trang",
+          "label_vi": "bánh tráng"
+        },
+        {
+          "key": "banh_hoi",
+          "label_vi": "bánh hỏi"
+        }
+      ]
+    },
+    "food_type": {
+      "label_vi": "kiểu thức ăn",
+      "nodes": [
+        {
+          "key": "noodle",
+          "label_vi": "dạng sợi"
+        },
+        {
+          "key": "rice_based",
+          "label_vi": "từ cơm / gạo hạt"
+        },
+        {
+          "key": "bread",
+          "label_vi": "bánh mì"
+        },
+        {
+          "key": "cake",
+          "label_vi": "bánh dạng cái / miếng"
+        },
+        {
+          "key": "sheet_or_wrapper",
+          "label_vi": "dạng tấm / lá / vỏ cuốn"
+        },
+        {
+          "key": "dumpling",
+          "label_vi": "dạng viên / há cảo / sủi cảo"
+        },
+        {
+          "key": "meat_or_seafood_dish",
+          "label_vi": "món thịt / hải sản"
+        },
+        {
+          "key": "vegetable_dish",
+          "label_vi": "món rau"
+        },
+        {
+          "key": "beverage",
+          "label_vi": "đồ uống"
+        },
+        {
+          "key": "sweet_dessert",
+          "label_vi": "đồ ngọt / chè"
+        }
+      ]
+    },
+    "dough_base": {
+      "label_vi": "loại bột",
+      "nodes": [
+        {
+          "key": "rice_flour",
+          "label_vi": "bột gạo"
+        },
+        {
+          "key": "wheat_flour",
+          "label_vi": "bột mì"
+        },
+        {
+          "key": "tapioca_starch",
+          "label_vi": "bột năng / bột sắn"
+        },
+        {
+          "key": "glutinous_rice_flour",
+          "label_vi": "bột nếp"
+        },
+        {
+          "key": "other_starch",
+          "label_vi": "bột khác"
+        }
+      ]
+    },
+    "lexical_family": {
+      "label_vi": "họ tên gọi (chỉ để nhận diện từ, KHÔNG phải nhóm món)",
+      "nodes": [
+        {
+          "key": "banh",
+          "label_vi": "bánh"
+        },
+        {
+          "key": "bun",
+          "label_vi": "bún"
+        },
+        {
+          "key": "pho",
+          "label_vi": "phở"
+        },
+        {
+          "key": "mi",
+          "label_vi": "mì"
+        },
+        {
+          "key": "com",
+          "label_vi": "cơm"
+        },
+        {
+          "key": "chao",
+          "label_vi": "cháo"
+        },
+        {
+          "key": "che",
+          "label_vi": "chè"
+        },
+        {
+          "key": "goi",
+          "label_vi": "gỏi"
+        },
+        {
+          "key": "nem",
+          "label_vi": "nem"
+        },
+        {
+          "key": "cha",
+          "label_vi": "chả"
+        },
+        {
+          "key": "xoi",
+          "label_vi": "xôi"
+        },
+        {
+          "key": "lau",
+          "label_vi": "lẩu"
+        },
+        {
+          "key": "hu_tieu",
+          "label_vi": "hủ tiếu"
+        },
+        {
+          "key": "mien",
+          "label_vi": "miến"
+        },
+        {
+          "key": "sup",
+          "label_vi": "súp"
+        },
+        {
+          "key": "canh",
+          "label_vi": "canh"
+        },
+        {
+          "key": "banh_canh",
+          "label_vi": "bánh canh"
+        },
+        {
+          "key": "banh_mi",
+          "label_vi": "bánh mì"
+        },
+        {
+          "key": "banh_trang",
+          "label_vi": "bánh tráng"
+        }
+      ]
+    },
+    "sweet_or_savory": {
+      "label_vi": "mặn / ngọt (theo loại món)",
+      "nodes": [
+        {
+          "key": "savory",
+          "label_vi": "món mặn"
+        },
+        {
+          "key": "sweet",
+          "label_vi": "món ngọt"
+        },
+        {
+          "key": "both",
+          "label_vi": "có cả mặn và ngọt"
+        }
+      ]
+    },
+    "preparation": {
+      "label_vi": "cách chế biến",
+      "nodes": [
+        {
+          "key": "fry",
+          "label_vi": "chiên"
+        },
+        {
+          "key": "deep_fry",
+          "label_vi": "chiên ngập dầu",
+          "parent": "fry"
+        },
+        {
+          "key": "stir_fry",
+          "label_vi": "xào"
+        },
+        {
+          "key": "grill",
+          "label_vi": "nướng"
+        },
+        {
+          "key": "mold_bake",
+          "label_vi": "nướng khuôn",
+          "parent": "grill"
+        },
+        {
+          "key": "steam",
+          "label_vi": "hấp"
+        },
+        {
+          "key": "boil",
+          "label_vi": "luộc"
+        },
+        {
+          "key": "braise",
+          "label_vi": "kho"
+        },
+        {
+          "key": "stew",
+          "label_vi": "hầm"
+        },
+        {
+          "key": "roast",
+          "label_vi": "quay"
+        },
+        {
+          "key": "pan_sear",
+          "label_vi": "áp chảo"
+        },
+        {
+          "key": "mix",
+          "label_vi": "trộn"
+        },
+        {
+          "key": "roll",
+          "label_vi": "cuốn"
+        },
+        {
+          "key": "simmer_glaze",
+          "label_vi": "rim"
+        },
+        {
+          "key": "griddle_pour",
+          "label_vi": "đổ / tráng (bột trên chảo, khuôn)"
+        },
+        {
+          "key": "raw_or_rare",
+          "label_vi": "sống / tái"
+        }
+      ]
+    },
+    "course": {
+      "label_vi": "vai trò trong bữa",
+      "nodes": [
+        {
+          "key": "main",
+          "label_vi": "món chính"
+        },
+        {
+          "key": "side",
+          "label_vi": "món phụ / ăn kèm"
+        },
+        {
+          "key": "appetizer",
+          "label_vi": "khai vị"
+        },
+        {
+          "key": "dessert",
+          "label_vi": "tráng miệng"
+        },
+        {
+          "key": "drink",
+          "label_vi": "đồ uống"
+        },
+        {
+          "key": "snack",
+          "label_vi": "ăn vặt"
+        }
+      ]
+    },
+    "meal_period": {
+      "label_vi": "thời điểm thường ăn (thói quen, không phải quy định)",
+      "nodes": [
+        {
+          "key": "breakfast",
+          "label_vi": "ăn sáng"
+        },
+        {
+          "key": "lunch",
+          "label_vi": "ăn trưa"
+        },
+        {
+          "key": "afternoon",
+          "label_vi": "ăn chiều"
+        },
+        {
+          "key": "dinner",
+          "label_vi": "ăn tối"
+        },
+        {
+          "key": "late_night",
+          "label_vi": "ăn khuya"
+        },
+        {
+          "key": "snack",
+          "label_vi": "ăn vặt"
+        }
+      ]
+    },
+    "cuisine": {
+      "label_vi": "ẩm thực",
+      "nodes": [
+        {
+          "key": "vietnamese",
+          "label_vi": "Việt Nam"
+        },
+        {
+          "key": "chinese",
+          "label_vi": "Trung Hoa"
+        },
+        {
+          "key": "japanese",
+          "label_vi": "Nhật"
+        },
+        {
+          "key": "korean",
+          "label_vi": "Hàn"
+        },
+        {
+          "key": "thai",
+          "label_vi": "Thái"
+        },
+        {
+          "key": "western",
+          "label_vi": "Âu / Mỹ"
+        },
+        {
+          "key": "italian",
+          "label_vi": "Ý",
+          "parent": "western"
+        },
+        {
+          "key": "french",
+          "label_vi": "Pháp",
+          "parent": "western"
+        },
+        {
+          "key": "american",
+          "label_vi": "Mỹ",
+          "parent": "western"
+        },
+        {
+          "key": "russian",
+          "label_vi": "Nga"
+        },
+        {
+          "key": "mediterranean",
+          "label_vi": "Địa Trung Hải"
+        },
+        {
+          "key": "mexican",
+          "label_vi": "Mexico"
+        },
+        {
+          "key": "indian",
+          "label_vi": "Ấn Độ"
+        },
+        {
+          "key": "cambodian",
+          "label_vi": "Campuchia"
+        },
+        {
+          "key": "malaysian_singaporean",
+          "label_vi": "Malaysia / Singapore"
+        },
+        {
+          "key": "taiwanese",
+          "label_vi": "Đài Loan"
+        },
+        {
+          "key": "middle_eastern",
+          "label_vi": "Trung Đông"
+        },
+        {
+          "key": "other",
+          "label_vi": "khác"
+        }
+      ]
+    },
+    "dietary": {
+      "label_vi": "chế độ ăn (CHỈ khi nguồn xác nhận)",
+      "nodes": [
+        {
+          "key": "vegetarian",
+          "label_vi": "chay"
+        },
+        {
+          "key": "vegan",
+          "label_vi": "thuần chay",
+          "parent": "vegetarian"
+        }
+      ]
+    }
+  },
+  "attributes": {
+    "temperature.serving": {
+      "label_vi": "nhiệt độ khi phục vụ (thói quen phục vụ, KHÔNG phải nhiệt độ thực tế của một đĩa)",
+      "type": "enum",
+      "values": {
+        "very_hot": "rất nóng",
+        "hot": "nóng",
+        "warm": "ấm",
+        "room": "nguội / nhiệt độ thường",
+        "cool": "mát",
+        "cold": "lạnh",
+        "iced": "có đá",
+        "either": "nóng hoặc lạnh tùy chọn"
+      }
+    },
+    "taste.salty": {
+      "label_vi": "mặn",
+      "type": "graded"
+    },
+    "taste.sweet": {
+      "label_vi": "ngọt",
+      "type": "graded"
+    },
+    "taste.sour": {
+      "label_vi": "chua",
+      "type": "graded"
+    },
+    "taste.spicy": {
+      "label_vi": "cay",
+      "type": "graded"
+    },
+    "taste.bitter": {
+      "label_vi": "đắng",
+      "type": "graded"
+    },
+    "taste.umami": {
+      "label_vi": "ngọt đậm (umami)",
+      "type": "graded"
+    },
+    "taste.rich": {
+      "label_vi": "béo",
+      "type": "graded"
+    },
+    "taste.aromatic": {
+      "label_vi": "thơm",
+      "type": "graded"
+    },
+    "taste.light": {
+      "label_vi": "thanh / nhẹ vị",
+      "type": "graded"
+    },
+    "taste.bold": {
+      "label_vi": "đậm đà",
+      "type": "graded"
+    },
+    "texture.crispy": {
+      "label_vi": "giòn",
+      "type": "graded"
+    },
+    "texture.soft": {
+      "label_vi": "mềm",
+      "type": "graded"
+    },
+    "texture.chewy": {
+      "label_vi": "dai",
+      "type": "graded"
+    },
+    "texture.sticky": {
+      "label_vi": "dẻo",
+      "type": "graded"
+    },
+    "texture.crispy_outside_soft_inside": {
+      "label_vi": "giòn ngoài mềm trong",
+      "type": "graded"
+    },
+    "texture.juicy": {
+      "label_vi": "mọng nước",
+      "type": "graded"
+    },
+    "texture.dry": {
+      "label_vi": "khô",
+      "type": "graded"
+    },
+    "texture.soupy": {
+      "label_vi": "nhiều nước",
+      "type": "graded"
+    },
+    "texture.thick": {
+      "label_vi": "sệt / đặc",
+      "type": "graded"
+    },
+    "texture.thin": {
+      "label_vi": "loãng",
+      "type": "graded"
+    },
+    "texture.creamy": {
+      "label_vi": "béo mịn",
+      "type": "graded"
+    }
+  },
+  "ingredient_roles": [
+    "base",
+    "main",
+    "protein",
+    "broth",
+    "sauce",
+    "topping",
+    "garnish",
+    "filling",
+    "served_with",
+    "optional_addon",
+    "condiment",
+    "unspecified"
+  ],
+  "ingredient_necessity": [
+    "always",
+    "usually",
+    "optional"
+  ],
+  "ingredient_completeness": [
+    "complete",
+    "partial",
+    "unknown"
+  ],
+  "ingredients": [
+    {
+      "key": "protein",
+      "label_vi": "đạm"
+    },
+    {
+      "key": "protein.beef",
+      "label_vi": "bò",
+      "parent": "protein"
+    },
+    {
+      "key": "protein.pork",
+      "label_vi": "heo / lợn",
+      "parent": "protein"
+    },
+    {
+      "key": "protein.chicken",
+      "label_vi": "gà",
+      "parent": "protein"
+    },
+    {
+      "key": "protein.duck",
+      "label_vi": "vịt",
+      "parent": "protein"
+    },
+    {
+      "key": "protein.egg",
+      "label_vi": "trứng",
+      "parent": "protein"
+    },
+    {
+      "key": "protein.tofu",
+      "label_vi": "đậu hũ",
+      "parent": "protein"
+    },
+    {
+      "key": "protein.seafood",
+      "label_vi": "hải sản",
+      "parent": "protein"
+    },
+    {
+      "key": "protein.seafood.fish",
+      "label_vi": "cá",
+      "parent": "protein.seafood"
+    },
+    {
+      "key": "protein.seafood.fish_cake",
+      "label_vi": "chả cá",
+      "parent": "protein.seafood.fish"
+    },
+    {
+      "key": "protein.seafood.jellyfish",
+      "label_vi": "sứa",
+      "parent": "protein.seafood"
+    },
+    {
+      "key": "protein.seafood.crustacean",
+      "label_vi": "giáp xác",
+      "parent": "protein.seafood"
+    },
+    {
+      "key": "protein.seafood.shrimp",
+      "label_vi": "tôm",
+      "parent": "protein.seafood.crustacean"
+    },
+    {
+      "key": "protein.seafood.crab",
+      "label_vi": "cua",
+      "parent": "protein.seafood.crustacean"
+    },
+    {
+      "key": "protein.seafood.swimming_crab",
+      "label_vi": "ghẹ",
+      "parent": "protein.seafood.crustacean"
+    },
+    {
+      "key": "protein.seafood.mollusk",
+      "label_vi": "nhuyễn thể",
+      "parent": "protein.seafood"
+    },
+    {
+      "key": "protein.seafood.squid",
+      "label_vi": "mực",
+      "parent": "protein.seafood.mollusk"
+    },
+    {
+      "key": "protein.seafood.clam",
+      "label_vi": "nghêu",
+      "parent": "protein.seafood.mollusk"
+    },
+    {
+      "key": "protein.seafood.cockle",
+      "label_vi": "sò",
+      "parent": "protein.seafood.mollusk"
+    },
+    {
+      "key": "protein.seafood.snail",
+      "label_vi": "ốc",
+      "parent": "protein.seafood.mollusk"
+    },
+    {
+      "key": "vegetable",
+      "label_vi": "rau / củ"
+    },
+    {
+      "key": "vegetable.herb",
+      "label_vi": "rau thơm",
+      "parent": "vegetable"
+    },
+    {
+      "key": "vegetable.herb.cilantro",
+      "label_vi": "ngò / rau mùi",
+      "parent": "vegetable.herb"
+    },
+    {
+      "key": "vegetable.herb.basil",
+      "label_vi": "húng quế",
+      "parent": "vegetable.herb"
+    },
+    {
+      "key": "vegetable.herb.mint",
+      "label_vi": "rau răm / húng",
+      "parent": "vegetable.herb"
+    },
+    {
+      "key": "vegetable.onion",
+      "label_vi": "hành",
+      "parent": "vegetable"
+    },
+    {
+      "key": "vegetable.garlic",
+      "label_vi": "tỏi",
+      "parent": "vegetable"
+    },
+    {
+      "key": "vegetable.chili",
+      "label_vi": "ớt",
+      "parent": "vegetable"
+    },
+    {
+      "key": "vegetable.bean_sprout",
+      "label_vi": "giá",
+      "parent": "vegetable"
+    },
+    {
+      "key": "vegetable.leafy",
+      "label_vi": "rau lá",
+      "parent": "vegetable"
+    },
+    {
+      "key": "vegetable.mushroom",
+      "label_vi": "nấm",
+      "parent": "vegetable"
+    },
+    {
+      "key": "grain",
+      "label_vi": "ngũ cốc / bột"
+    },
+    {
+      "key": "grain.rice",
+      "label_vi": "gạo",
+      "parent": "grain"
+    },
+    {
+      "key": "grain.rice_flour",
+      "label_vi": "bột gạo",
+      "parent": "grain"
+    },
+    {
+      "key": "grain.wheat_flour",
+      "label_vi": "bột mì",
+      "parent": "grain"
+    },
+    {
+      "key": "grain.tapioca_starch",
+      "label_vi": "bột năng",
+      "parent": "grain"
+    },
+    {
+      "key": "grain.glutinous_rice",
+      "label_vi": "nếp",
+      "parent": "grain"
+    },
+    {
+      "key": "nut",
+      "label_vi": "hạt"
+    },
+    {
+      "key": "nut.peanut",
+      "label_vi": "đậu phộng / lạc",
+      "parent": "nut"
+    },
+    {
+      "key": "dairy",
+      "label_vi": "sữa / phô mai"
+    },
+    {
+      "key": "dairy.cheese",
+      "label_vi": "phô mai",
+      "parent": "dairy"
+    },
+    {
+      "key": "dairy.milk",
+      "label_vi": "sữa",
+      "parent": "dairy"
+    },
+    {
+      "key": "condiment",
+      "label_vi": "gia vị / nước chấm"
+    },
+    {
+      "key": "condiment.fish_sauce",
+      "label_vi": "nước mắm",
+      "parent": "condiment",
+      "derived_from": "protein.seafood.fish"
+    },
+    {
+      "key": "condiment.shrimp_paste",
+      "label_vi": "mắm tôm",
+      "parent": "condiment",
+      "derived_from": "protein.seafood.shrimp"
+    },
+    {
+      "key": "condiment.soy_sauce",
+      "label_vi": "nước tương / xì dầu",
+      "parent": "condiment"
+    },
+    {
+      "key": "condiment.satay",
+      "label_vi": "sa tế",
+      "parent": "condiment"
+    },
+    {
+      "key": "condiment.pepper",
+      "label_vi": "tiêu",
+      "parent": "condiment"
+    },
+    {
+      "key": "condiment.sugar",
+      "label_vi": "đường",
+      "parent": "condiment"
+    },
+    {
+      "key": "condiment.msg",
+      "label_vi": "bột ngọt",
+      "parent": "condiment"
+    }
+  ],
+  "relations": {
+    "variant_of": {
+      "label_vi": "biến thể của",
+      "target": "entity"
+    },
+    "related_to": {
+      "label_vi": "liên quan",
+      "target": "entity"
+    },
+    "similar_to": {
+      "label_vi": "tương tự",
+      "target": "entity"
+    },
+    "commonly_served_with": {
+      "label_vi": "thường ăn kèm",
+      "target": "entity"
+    },
+    "regional_specialty": {
+      "label_vi": "đặc sản vùng",
+      "target": "region"
+    },
+    "regional_style": {
+      "label_vi": "mang kiểu / tên vùng (vd. Bún bò Huế, Hủ tiếu Nam Vang)",
+      "target": "region",
+      "note": "Phong cách/tên gọi theo vùng của MÓN. KHÔNG phải nơi quán đặt, KHÔNG khẳng định là đặc sản, KHÔNG gộp với món gốc."
+    },
+    "origin_region": {
+      "label_vi": "có nguồn gốc từ",
+      "target": "region",
+      "note": "Chỉ khi nguồn nói rõ nguồn gốc/xuất xứ của món. KHÔNG phải vị trí quán."
+    }
+  },
+  "source_quality_tiers": {
+    "1": "website/menu chính thức của quán",
+    "2": "du lịch / nhà nước / tổ chức điểm đến chính thức",
+    "3": "ấn phẩm uy tín / bách khoa / bản đồ mở",
+    "4": "bài viết tổng hợp / danh bạ / blog doanh nghiệp",
+    "5": "nguồn yếu / chưa xác minh"
+  }
+}

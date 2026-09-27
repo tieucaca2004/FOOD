@@ -1,11 +1,23 @@
 import { logger } from "../../src/logger.js";
 import { deriveAccountFieldsFromLegacyStatus } from "../domain/merchantStatus.js";
+import { platformConfig } from "../config.js";
+import { runAtieuCatalogSeed } from "./atieuCatalogSeed.js";
 
 // Idempotent, production-safe seed: registers ONLY the real, already-live
 // A Tiểu merchant. Never inserts placeholder/demo merchants into the real
 // platform DB — a second merchant for testing multi-merchant discovery
 // lives only in test fixtures (test/platform/helpers.js), never here.
-export function runPlatformSeed(db) {
+//
+// atieuEngine picks the engine that serves ATIEU001 — always explicit
+// (PLATFORM_ATIEU_ENGINE), never implied:
+//   "legacy"  (default) module 'atieu': the unchanged src/ engine, which also
+//             notifies the shop of every confirmed order (Telegram).
+//   "generic" module 'generic': the generic merchant engine over the A Tiểu
+//             catalog (atieuCatalogSeed.js). Generic orders go through the
+//             platform's merchant dispatch port, which has no real channel
+//             yet — they are recorded, not delivered to the shop.
+export function runPlatformSeed(db, { atieuEngine = platformConfig.atieuEngine } = {}) {
+  const generic = atieuEngine === "generic";
   db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_plans_name ON plans(plan_id)`);
 
   const upsertPlan = db.prepare(`
@@ -31,7 +43,7 @@ export function runPlatformSeed(db) {
     merchant_id: "ATIEU001",
     name: "Hủ Tiếu Xào A Tiểu",
     slug: "hu-tieu-xao-a-tieu",
-    module: "atieu",
+    module: generic ? "generic" : "atieu",
     status: "ACTIVE",
     account_status: accountStatus,
     active: active ? 1 : 0,
@@ -47,5 +59,7 @@ export function runPlatformSeed(db) {
     ).run();
   }
 
-  logger.info("DB", "platform seed applied", { merchants: 1 });
+  if (generic) runAtieuCatalogSeed(db);
+
+  logger.info("DB", "platform seed applied", { merchants: 1, atieuEngine: generic ? "generic" : "legacy" });
 }

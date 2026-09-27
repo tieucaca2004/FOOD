@@ -4,7 +4,7 @@ import { createPlatformConnection, runPlatformMigrations } from "./db/connection
 import { runPlatformSeed } from "./db/seed.js";
 import { createPlatformRepositories } from "./repositories/index.js";
 import { createPlatformServices } from "./services/index.js";
-import { createConciergeAIProvider } from "./ai/index.js";
+import { createConciergeAIProvider, createGptFoodConcierge } from "./ai/index.js";
 import { MerchantRegistry, buildAtieuAdapterFactory, buildGenericAdapterFactory } from "./merchant/MerchantRegistry.js";
 import { MerchantRouter } from "./merchant/MerchantRouter.js";
 import { DiscoveryEngine } from "./discovery/DiscoveryEngine.js";
@@ -30,6 +30,8 @@ runPlatformSeed(platformDb); // idempotent, registers only the real ATIEU001 mer
 const repos = createPlatformRepositories(platformDb);
 const services = createPlatformServices(repos);
 const ai = createConciergeAIProvider();
+// Learning-event retention: only normalized phrases are stored, and only for a bounded window.
+services.productLanguage.pruneEvents();
 
 // Boot A Tiểu's engine against its own DB/config, completely as-is.
 const atieuDb = createAtieuConnection(atieuConfig.dbPath);
@@ -49,16 +51,93 @@ const registry = new MerchantRegistry({
       merchantDataService: services.merchantData,
       cartService: services.cart,
       orderService: services.orders,
+      conversationStates: repos.conversationStates,
+      cartCheckout: repos.cartCheckout,
+      productLanguage: services.productLanguage,
+      customerMemory: services.customerMemory,
     }),
   },
 });
 
 const merchantRouter = new MerchantRouter(registry);
 const discovery = new DiscoveryEngine(services.merchantData, registry);
-const agentSearch = new AgentSearchService({ discovery, registry });
-const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai });
+// Food Knowledge discovery: loaded ONLY when explicitly enabled (default off);
+// read-only; a missing/broken knowledge.db leaves it disabled, never breaks boot.
+let foodKnowledge = null;
+if (platformConfig.foodKnowledgeDiscoveryEnabled) {
+  try {
+    const { createFoodKnowledge } = await import("./services/foodKnowledgeAdapter.js");
+    foodKnowledge = createFoodKnowledge({ dbPath: platformConfig.knowledgeDbPath, services, isRoutable: (m) => merchantRouter.isRoutable(m) });
+    logger.info("APP", "food knowledge discovery enabled (read-only)", { dbPath: platformConfig.knowledgeDbPath });
+  } catch (err) {
+    logger.warn("APP", "food knowledge discovery NOT enabled", { error: err.message });
+  }
+}
+const agentSearch = new AgentSearchService({ discovery, registry, foodKnowledge });
 
-const app = createPlatformApp({ db: platformDb, repos, services, discovery, merchantRouter, registry, router });
+// Customer contributions (Multimodal Knowledge Ingestion V1): loaded ONLY when USER_CONTRIBUTIONS_ENABLED=true AND a
+// contributor hash key (>= 32 bytes) exists — fail-closed. Writes the WORKING knowledge DB (evidence + unverified
+// candidates for review); never the catalog, a price, orderability, a cart or an order.
+let contributionService = null;
+if (platformConfig.userContributionsEnabled) {
+  try {
+    const { createContributionIngest, telegramFileFetcher } = await import("./services/knowledgeIngestAdapter.js");
+    const { ContributionService } = await import("./services/contributionService.js");
+    const { zaloMediaFetcher } = await import("./channel/zalo/zaloMedia.js");
+    const { createImageUnderstanding } = await import("./ai/ingest/index.js");
+    const { sendTelegramMessage } = await import("./channel/telegram/telegramClient.js");
+    const { sendPlatformTextMessage } = await import("./channel/zaloClient.js");
+    const reader = await createImageUnderstanding();
+    const ingest = createContributionIngest({
+      dbPath: platformConfig.knowledgeIngestDbPath,
+      rawRoot: platformConfig.knowledgeIngestRawRoot,
+      hashKey: platformConfig.contributorHashKey,
+      hashKid: platformConfig.contributorHashKid,
+      ...reader.asReaders(),
+      fetchTelegram: platformConfig.telegramBotToken ? telegramFileFetcher({ botToken: platformConfig.telegramBotToken, fetchImpl: globalThis.fetch }) : null,
+      fetchZalo: zaloMediaFetcher({ hosts: platformConfig.zaloMediaHosts, maxBytes: platformConfig.contributionMaxImageBytes }),
+      logger,
+      pendingTtlMs: platformConfig.contributionPendingTtlMinutes * 60_000,
+      maxImageBytes: platformConfig.contributionMaxImageBytes,
+    });
+    if (!ingest) logger.warn("APP", "customer contributions NOT enabled: KNOWLEDGE_CONTRIBUTOR_HASH_KEY missing or shorter than 32 bytes");
+    else {
+      const send = (target, text) => (target.channel === "telegram" ? sendTelegramMessage({ chatId: target.chatId, text }) : sendPlatformTextMessage(target.userId, text));
+      contributionService = new ContributionService({ ingest, services, repos, foodKnowledge, send, logger, maxImagesPerDay: platformConfig.contributionMaxImagesPerDay, maxImagesPerAlbum: platformConfig.contributionMaxImagesPerAlbum });
+      logger.info("APP", "customer contributions enabled (review only)", { reader: reader.name, model: reader.model ?? null, dbPath: platformConfig.knowledgeIngestDbPath });
+    }
+  } catch (err) {
+    logger.warn("APP", "customer contributions NOT enabled", { error: err.message });
+  }
+}
+
+// GPT FOOD concierge: only when OPENAI_ENABLED=true with a key and a model; otherwise fully deterministic.
+const gpt = await createGptFoodConcierge({ services, repos, agentSearch, merchantRouter, logger, contributions: contributionService });
+if (gpt) logger.info("APP", "gpt food concierge enabled", { model: platformConfig.openaiModel, timeoutMs: platformConfig.openaiTimeoutMs, maxToolTurns: platformConfig.openaiMaxToolTurns });
+else if (platformConfig.openaiEnabled) logger.warn("APP", "gpt food concierge NOT enabled: OPENAI_API_KEY or OPENAI_MODEL missing");
+const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai, gpt });
+
+// Knowledge Ingestion: loaded ONLY when enabled AND a Knowledge Group is configured (default off).
+let knowledgeIngest = null;
+if (platformConfig.knowledgeIngestEnabled && platformConfig.knowledgeGroupChatIds.length) {
+  try {
+    const { createKnowledgeIngest } = await import("./services/knowledgeIngestAdapter.js");
+    knowledgeIngest = createKnowledgeIngest({
+      dbPath: platformConfig.knowledgeIngestDbPath,
+      rawRoot: platformConfig.knowledgeIngestRawRoot,
+      groupChatIds: platformConfig.knowledgeGroupChatIds,
+      botToken: platformConfig.telegramBotToken,
+      logger,
+    });
+    logger.info("APP", "knowledge ingestion enabled (review only)", { groups: platformConfig.knowledgeGroupChatIds.length, dbPath: platformConfig.knowledgeIngestDbPath });
+  } catch (err) {
+    logger.warn("APP", "knowledge ingestion NOT enabled", { error: err.message });
+  }
+}
+
+// the channels see the router through the contribution wrapper (same interface; text turns pass through unchanged)
+const channelRouter = contributionService ? contributionService.wrapRouter(router) : router;
+const app = createPlatformApp({ db: platformDb, repos, services, discovery, merchantRouter, registry, router: channelRouter, knowledgeIngest, contributions: Boolean(contributionService) });
 
 const server = app.listen(platformConfig.port, () => {
   logger.info("APP", `Tổng Đài platform listening on :${platformConfig.port}`, {
@@ -67,11 +146,26 @@ const server = app.listen(platformConfig.port, () => {
   });
 });
 
+// Merchant order dispatch: re-deliver generic orders whose notification to
+// the merchant failed (per-order attempt cap in OrderService; a delivery
+// that succeeded is never sent again).
+const DISPATCH_RETRY_INTERVAL_MS = 60_000;
+const dispatchRetry = setInterval(() => {
+  services.orders
+    .retryFailedDispatches()
+    .then((results) => results.length && logger.info("DISPATCH", "dispatch retry run", { results }))
+    .catch((err) => logger.error("DISPATCH", "dispatch retry run failed", { error: err.message }));
+}, DISPATCH_RETRY_INTERVAL_MS);
+dispatchRetry.unref();
+
 function shutdown(signal) {
   logger.info("APP", `platform received ${signal}, shutting down`);
+  clearInterval(dispatchRetry);
   server.close(() => {
     platformDb.close();
     atieuDb.close();
+    foodKnowledge?.close();
+    contributionService?.ingest.close();
     process.exit(0);
   });
   setTimeout(() => process.exit(1), 10_000).unref();

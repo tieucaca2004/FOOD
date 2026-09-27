@@ -1,5 +1,9 @@
 import { ORDER_STATUS, assertTransition } from "../domain/orderStateMachine.js";
 import { isAccountDiscoverable } from "../domain/merchantStatus.js";
+import { logger } from "../../src/logger.js"; // generic, read-only reuse
+
+// Automatic re-delivery stops after this many attempts per order.
+export const MAX_DISPATCH_ATTEMPTS = 5;
 
 /**
  * Generic Order + Dispatch Engine (Phase 6): the sole business authority
@@ -163,11 +167,59 @@ export class OrderService {
 
     // The only step left after the order transaction commits — its
     // failure can never roll back the already-valid, already-committed
-    // order (approved decision #3).
-    const dispatchResult = await this.dispatchPort.dispatch(order);
-    const finalOrder = await this.markDispatched(order.id, dispatchResult);
+    // order (approved decision #3), nor fail this call: the order exists
+    // either way, and `dispatch` says whether the merchant has it.
+    return this._deliver(order);
+  }
 
-    return hydrateOrder(finalOrder, this.repos.orders.listItems(order.id));
+  // Hands a committed order to the merchant dispatch port. Never throws for
+  // a delivery problem — the order stays as it is (CREATED) and queryable.
+  async _deliver(order) {
+    let dispatchResult;
+    try {
+      dispatchResult = await this.dispatchPort.dispatch(order);
+    } catch (err) {
+      logger.error("ORDER", "merchant dispatch threw; order kept", { orderId: order.id, error: err.message });
+      dispatchResult = { delivered: false, reason: "DISPATCH_ERROR" };
+    }
+    let finalOrder;
+    try {
+      finalOrder = await this.markDispatched(order.id, dispatchResult);
+    } catch (err) {
+      logger.error("ORDER", "could not record merchant dispatch; order kept", { orderId: order.id, error: err.message });
+      finalOrder = this.repos.orders.getById(order.id);
+    }
+    return {
+      ...hydrateOrder(finalOrder, this.repos.orders.listItems(order.id)),
+      dispatch: { delivered: Boolean(dispatchResult?.delivered), reason: dispatchResult?.reason ?? null },
+    };
+  }
+
+  // Re-delivers one order (operator / retry job). Idempotent: an order that
+  // is no longer CREATED (already sent, received or cancelled) is left alone,
+  // and the dispatch port itself never re-sends a delivery that succeeded.
+  async redispatch(orderId) {
+    requirePositiveInt(orderId, "ORDER_NOT_FOUND", `Order ${orderId} not found`);
+    const order = this.repos.orders.getById(orderId);
+    if (!order) throw new OrderError("ORDER_NOT_FOUND", `Order ${orderId} not found`, 404);
+    if (order.status !== ORDER_STATUS.CREATED) {
+      return {
+        ...hydrateOrder(order, this.repos.orders.listItems(orderId)),
+        dispatch: { delivered: order.status !== ORDER_STATUS.CANCELLED, reason: "NOT_PENDING" },
+      };
+    }
+    return this._deliver(order);
+  }
+
+  // Retries every delivery that failed (or never finished) for a still-
+  // CREATED order, up to MAX_DISPATCH_ATTEMPTS attempts each.
+  async retryFailedDispatches({ maxAttempts = MAX_DISPATCH_ATTEMPTS } = {}) {
+    const results = [];
+    for (const record of this.repos.merchantDispatch.listRetryable({ maxAttempts })) {
+      const order = await this.redispatch(record.order_id);
+      results.push({ orderId: order.id, orderCode: order.order_code, merchantId: order.merchant_id, ...order.dispatch });
+    }
+    return results;
   }
 
   getOrder(customerId, orderId) {

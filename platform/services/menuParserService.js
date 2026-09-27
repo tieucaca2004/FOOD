@@ -31,13 +31,33 @@ function parsePriceToken(rawToken) {
   return null; // ambiguous — never guessed
 }
 
+// A currency / thousands unit written after the number ("70.000đ", "70.000 đ", "45 nghìn", "40 k").
+const UNIT = /^(?:đ|₫|d|vnd|vnđ|đồng|dong|k|nghìn|nghin|ngàn|ngan)$/i;
+// An update command in front of the dish ("Thêm món Bún Cá 45k", "Cập nhật giá Hủ Tiếu Xào Bò 70k"): not part of the name
+const COMMAND = /^(?:thêm|them|bổ sung|bo sung|cập nhật|cap nhat|sửa|sua|đổi|doi|update|add)(?:\s+(?:món|mon|giá|gia))*\s+/i;
+const TRAILING_SEPARATOR = /[\s\-–—:|=.·,]+$/u;
+
+function priceOf(parts) {
+  // "65k" / "65.000" / "65.000đ" in the last token, or "65.000 đ" / "45 nghìn" in the last two
+  const last = parts[parts.length - 1];
+  const direct = parsePriceToken(last) ?? parsePriceToken(last.replace(/(?:đ|₫|vnđ|vnd|đồng)$/i, ""));
+  if (direct !== null) return { price: direct, used: 1 };
+  if (parts.length > 2 && UNIT.test(last)) {
+    const unit = last.toLowerCase();
+    const number = parts[parts.length - 2];
+    const thousands = ["k", "nghìn", "nghin", "ngàn", "ngan"].includes(unit);
+    const value = thousands ? parsePriceToken(`${number}k`) : parsePriceToken(number);
+    if (value !== null) return { price: value, used: 2 };
+  }
+  return { price: null, used: 0 };
+}
+
 function extractNameAndPrice(line) {
-  const trimmed = line.trim();
+  const trimmed = line.trim().replace(COMMAND, "");
   const parts = trimmed.split(/\s+/);
-  const lastToken = parts[parts.length - 1];
-  const price = parsePriceToken(lastToken);
-  if (price !== null && parts.length > 1) {
-    return { name: parts.slice(0, -1).join(" ").trim(), price };
+  const { price, used } = priceOf(parts);
+  if (price !== null && parts.length > used) {
+    return { name: parts.slice(0, -used).join(" ").replace(TRAILING_SEPARATOR, "").trim(), price };
   }
   return { name: trimmed, price: null };
 }

@@ -14,9 +14,22 @@
     "platform:migrate": "node platform/scripts/migrate.js",
     "platform:seed": "node platform/scripts/seed.js",
     "platform:seed:demo": "node platform/scripts/seed-demo.js",
+    "platform:seed:atieu": "node platform/scripts/seed-atieu.js",
+    "platform:dispatch": "node platform/scripts/dispatch.js",
+    "platform:menu": "node platform/scripts/menu.js",
+    "knowledge:check": "node platform/scripts/knowledge.js check",
+    "knowledge:init": "node platform/scripts/knowledge.js init",
+    "knowledge:collect": "node tools/knowledge-collector/cli.js",
+    "test:collector": "node --test tools/knowledge-collector/test/*.test.js",
+    "platform:aliases": "node platform/scripts/aliases.js",
     "test": "node --test test/unit/*.test.js test/integration/*.test.js test/e2e/*.test.js",
     "test:platform": "node --test platform/test/unit/*.test.js platform/test/integration/*.test.js platform/test/e2e/*.test.js",
-    "test:all": "npm test && npm run test:platform"
+    "test:all": "npm test && npm run test:platform && npm run test:collector",
+    "test:gpt-live": "node --test platform/test/live/gptLive.test.js",
+    "test:gpt-founder-live": "node --test platform/test/live/gptFounderAliasLive.test.js",
+    "test:search-live": "node --test platform/test/live/searchLive.test.js",
+    "bench:search": "node platform/test/bench/searchBenchmark.js",
+    "test:image-live": "node --test platform/test/live/imageUnderstandingLive.test.js"
   },
   "engines": {
     "node": ">=18"

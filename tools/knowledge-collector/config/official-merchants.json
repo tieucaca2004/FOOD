@@ -1,0 +1,36 @@
+{
+  "note": "Merchants whose OWN website is an official source: either an owner-supplied menu snapshot (snapshot) or the merchant's own HTML menu page (menu_url, robots-checked). address_text / hours_text are only used when they appear VERBATIM on the merchant's own pages (otherwise skipped and reported). No merchant here is bridged to the ordering platform automatically.",
+  "merchants": [
+    {
+      "homepage": "https://www.atieu.com/",
+      "merchant_name": "A. Tiểu",
+      "snapshot": "platform/db/catalog/atieu_menu.json",
+      "address_text": "86 Lạc Long Quân",
+      "street": "Lạc Long Quân",
+      "hours_text": "17:00–22:00",
+      "region_id": "vn.khanh-hoa.nha-trang"
+    },
+    {
+      "homepage": "https://buncamin.com/",
+      "merchant_name": "Bún Cá Mịn",
+      "menu_url": "https://buncamin.com/menu/",
+      "address_text": "170 Bạch Đằng, Phường Tân Lập, Tp Nha Trang",
+      "region_id": "vn.khanh-hoa.nha-trang"
+    },
+    {
+      "homepage": "https://fishhousenhatrang.com/",
+      "merchant_name": "Fish House Nha Trang",
+      "menu_url": "https://fishhousenhatrang.com/menu",
+      "address_text": "17 Nguyễn Đức Cảnh, Nha Trang",
+      "region_id": "vn.khanh-hoa.nha-trang"
+    },
+    {
+      "homepage": "https://nemdangvanquyen.vn/",
+      "merchant_name": "Nem Đặng Văn Quyên",
+      "menu_url": "https://nemdangvanquyen.vn/",
+      "address_text": "Số 16A Lãn Ông, Phường Nha Trang, Tỉnh Khánh Hòa, Việt Nam",
+      "region_id": "vn.khanh-hoa.nha-trang",
+      "note": "Two branches on the site (16A Lãn Ông; 02-04 Phan Bội Châu); only branch 1 is recorded as this merchant's location — a second branch is a second place, for a person to add."
+    }
+  ]
+}

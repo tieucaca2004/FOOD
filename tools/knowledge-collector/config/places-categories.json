@@ -1,0 +1,10 @@
+{
+  "note": "Google Maps discovery through the OFFICIAL Places API (Text Search) — runs only with GOOGLE_PLACES_API_KEY and the --places flag. Each category is searched for the city and for every ward in regions/nha-trang.json (category × location). Google Maps Platform terms restrict storing Places content beyond the place ID: the founder decides the retention policy before this is run.",
+  "max_queries": 400,
+  "categories": [
+    "quán bún cá", "quán bún sứa", "quán bánh căn", "quán bánh xèo", "quán nem nướng", "quán hải sản", "quán cơm", "quán cơm gà",
+    "quán mì", "quán phở", "quán cháo", "quán chay", "quán ăn đêm", "quán bánh canh", "quán bún bò", "quán hủ tiếu", "quán ốc",
+    "quán lẩu", "quán nướng", "quán bánh mì", "quán chè", "nhà hàng", "nhà hàng khách sạn", "nhà hàng món Hoa", "nhà hàng Nhật",
+    "nhà hàng Hàn Quốc", "nhà hàng Thái", "nhà hàng BBQ", "nhà hàng steak", "seafood restaurant", "nhà hàng Ấn Độ", "nhà hàng Nga", "nhà hàng Ý", "cafe"
+  ]
+}

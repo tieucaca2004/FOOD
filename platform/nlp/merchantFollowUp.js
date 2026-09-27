@@ -10,9 +10,12 @@ import { normalizeForMatch } from "./searchQuery.js";
 // Phrases are matched on accent-free text too, because customers type
 // "co thuc don ko" / "quan o dau" as often as the accented form.
 
-const MENU = /\b(menu|thuc don|co mon gi|mon gi|xem mon|danh sach mon)\b/;
+const MENU = /\b(menu|thuc don|co mon gi|mon gi|xem mon|danh sach mon|ban gi|ban nhung gi|co nhung gi)\b/;
+// Phrases that qualify a menu request without naming anything.
+const MENU_QUALIFIERS = /\b(toan bo|tat ca|day du|full|het|ban gi|ban nhung gi|co nhung gi)\b/g;
 const LOCATION = /\b(dia chi|(quan|shop|nha hang)( nay| do)? (o|nam o) dau)\b|^(o dau|dia chi)( vay| the| a)?$/;
-const ASKS_WHICH_MERCHANT = /\b(quan nao|nha hang nao|shop nao|noi nao|cho nao)\b/;
+const LEADING_QUANTITY_ITEM = /^(?:\d{1,3}|mot|hai|ba|bon|nam|sau|bay|tam|chin|muoi)\s+(?:(?:phan|suat|cai|dia|ly|to|chai|lon)\s+)?[a-z]{2,}/;
+const ASKS_WHICH_MERCHANT =/\b(quan nao|nha hang nao|shop nao|noi nao|cho nao)\b/;
 const PRODUCT_QUESTION =/^(?:quan\s+(?:nay\s+)?)?(?:co|con)\s+(.+?)\s+(?:khong|ko|k|hong|hem|chua)$/;
 
 // A Tiểu's classifyIntent labels that always target a single merchant.
@@ -44,6 +47,7 @@ export function classifyMerchantFollowUp(text) {
   // "có quán nào bán pizza không" asks WHICH merchant — a marketplace search.
   if (ASKS_WHICH_MERCHANT.test(normalized)) return null;
   const rest = normalized
+    .replace(MENU_QUALIFIERS, " ")
     .split(" ")
     .filter((w) => !FOLLOW_UP_WORDS.has(w))
     .join(" ");
@@ -52,6 +56,8 @@ export function classifyMerchantFollowUp(text) {
   if (LOCATION.test(normalized)) return { kind: "location", rest };
   if (PRODUCT_QUESTION.test(normalized)) return { kind: "merchant_message", rest: "" };
   if (MERCHANT_SCOPED_INTENTS.has(classifyIntent(text).intent)) return { kind: "merchant_message", rest: "" };
+  // "2 pizza tôm" — items with a quantity but no verb are still an order.
+  if (LEADING_QUANTITY_ITEM.test(normalized)) return { kind: "merchant_message", rest: "" };
   return null;
 }
 

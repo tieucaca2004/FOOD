@@ -1,0 +1,22 @@
+{
+  "note": "OSM cuisine tag values -> taxonomy concepts, for merchant-level discovery ('quán hải sản'). A merchant's cuisine tag says what KIND of place it is — it never creates a product or a dish fact.",
+  "map": {
+    "vietnamese": [{ "concept": "facet:cuisine", "value": "vietnamese" }],
+    "chinese": [{ "concept": "facet:cuisine", "value": "chinese" }],
+    "japanese": [{ "concept": "facet:cuisine", "value": "japanese" }],
+    "sushi": [{ "concept": "facet:cuisine", "value": "japanese" }],
+    "korean": [{ "concept": "facet:cuisine", "value": "korean" }],
+    "thai": [{ "concept": "facet:cuisine", "value": "thai" }],
+    "italian": [{ "concept": "facet:cuisine", "value": "italian" }],
+    "pizza": [{ "concept": "facet:cuisine", "value": "italian" }],
+    "seafood": [{ "concept": "ingredient", "value": "protein.seafood" }],
+    "fish": [{ "concept": "ingredient", "value": "protein.seafood.fish" }],
+    "noodle": [{ "concept": "facet:food_type", "value": "noodle" }],
+    "vegetarian": [{ "concept": "facet:dietary", "value": "vegetarian" }],
+    "vegan": [{ "concept": "facet:dietary", "value": "vegan" }],
+    "coffee_shop": [{ "concept": "facet:dish_form", "value": "drink" }],
+    "juice": [{ "concept": "facet:dish_form", "value": "drink" }],
+    "bubble_tea": [{ "concept": "facet:dish_form", "value": "drink" }],
+    "ice_cream": [{ "concept": "facet:dish_form", "value": "dessert" }]
+  }
+}
