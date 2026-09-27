@@ -32,6 +32,11 @@ export class PlatformSessionService {
     this.repos.sessions.setKnowledgeContext(sessionId, context);
   }
 
+  /** When the platform last replied in this session (SQLite UTC text), or null. */
+  lastReplyAt(sessionId) {
+    return this.repos.messages.lastOutboundAt?.(sessionId) ?? null;
+  }
+
   returnToPlatform(sessionId) {
     this.repos.merchantSessions.closeOpenForSession(sessionId);
     return this.repos.sessions.returnToPlatform(sessionId);

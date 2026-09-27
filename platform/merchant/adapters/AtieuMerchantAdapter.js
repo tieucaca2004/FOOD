@@ -110,6 +110,27 @@ export class AtieuMerchantAdapter extends MerchantModule {
     };
   }
 
+  // Read-only: is an order being built with this module (a checkout question, a confirmation, a pending
+  // order, or a cart with items)? The platform keeps the customer in the place while it is.
+  hasOrderInProgress(platformCustomerId) {
+    const customer = this._atieuCustomer(platformCustomerId);
+    if (!customer) return false;
+    const state = this.checkoutState(platformCustomerId);
+    if (state.field || state.awaitingConfirmation || state.pendingOrderTotal !== null) return true;
+    const carts = this.services.cart?.repos?.carts;
+    const cart = carts?.getActiveByCustomer(customer.id);
+    return Boolean(cart && carts.listItems(cart.id).length);
+  }
+
+  // Read-only: how many items are in this customer's active cart with the module (null: no customer yet).
+  cartQuantity(platformCustomerId) {
+    const customer = this._atieuCustomer(platformCustomerId);
+    if (!customer) return 0;
+    const carts = this.services.cart?.repos?.carts;
+    const cart = carts?.getActiveByCustomer(customer.id);
+    return cart ? carts.listItems(cart.id).reduce((n, i) => n + (i.quantity ?? 0), 0) : 0;
+  }
+
   _atieuCustomer(platformCustomerId) {
     return this.services.customers.repos.customers.findByZaloUserId(`platform:${platformCustomerId}`) || null;
   }

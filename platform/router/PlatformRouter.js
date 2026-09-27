@@ -97,8 +97,15 @@ function formatMenuSummary(menu) {
   )}\n\nAnh/chị muốn đặt món gì ạ? (Gõ "quay lại tổng đài" để tìm quán khác)`;
 }
 
+// merchant context lifecycle: back to the Core after this much silence (unless an order is in progress there)
+const MERCHANT_IDLE_MS = 60 * 60 * 1000;
+// the legacy module's product-question intents (its own labels, src/router/businessRouter.js _reply())
+const LEGACY_PRODUCT_INTENTS = new Set(["product_question", "product_price", "product_availability"]);
+// the platform's own ordering reading (conversation/understand.js) of turns that continue an order without naming a dish
+const ORDER_CONTINUATION = new Set(["quantity_only", "adjust_quantity", "change_quantity", "choose_option", "confirm_order", "cancel_order", "provide_delivery_address", "ask_total", "review_order", "show_cart", "reorder"]);
+
 export class PlatformRouter {
-  constructor({ services, discovery, agentSearch, merchantRouter, ai, gpt = null }) {
+  constructor({ services, discovery, agentSearch, merchantRouter, ai, gpt = null, now = () => new Date(), merchantIdleMs = MERCHANT_IDLE_MS }) {
     this.services = services;
     this.discovery = discovery;
     // Phase 2: global keyword search now goes through AgentSearchService
@@ -111,6 +118,8 @@ export class PlatformRouter {
     // Optional GPT FOOD concierge (platform/ai/foodConcierge, OPENAI_ENABLED). Only an interface here:
     // respond() returns a guarded answer or null — null always means "keep the deterministic reply".
     this.gpt = gpt;
+    this.now = now;
+    this.merchantIdleMs = merchantIdleMs;
   }
 
   // Deterministic search first (cheap, and the only path that lists ORDERABLE catalog places and sets
@@ -157,6 +166,12 @@ export class PlatformRouter {
     if (scope.scope === "OUT_OF_SCOPE") return { replyText: SCOPE_REPLY, session, scope };
 
     const concierge = classifyConciergeIntent(text);
+
+    // Merchant context lifecycle: a customer who comes back after a long pause is back at the Core — unless an
+    // order is being built there (cart, checkout question, confirmation), which keeps the place.
+    if (session.context === "merchant" && session.active_merchant_id && this._merchantContextIdle(customer, session)) {
+      session = this.services.sessions.returnToPlatform(session.id);
+    }
 
     if (session.context === "merchant" && session.active_merchant_id) {
       return this._handleWithinMerchant(customer, session, text, concierge);
@@ -206,6 +221,10 @@ export class PlatformRouter {
       const updated = this.services.sessions.returnToPlatform(session.id);
       return { replyText: "Quán này hiện không khả dụng, anh/chị tìm quán khác giúp em nha.", session: updated };
     }
+    // Conversation ownership: the merchant's engine could not handle this turn (its own verdict — see
+    // _routeToLegacy), so it is not an ordering turn: the Core answers it (search / GPT with tools), and the
+    // customer stays in the place (GPT sees current_merchant_id). The engine's fallback text is never sent.
+    if (result.handBack) return this._handleAtPlatform(customer, session, text, concierge);
     // the place does not have that dish: it answers (merchant-local), and FOOD says — without leaving the place —
     // that other places have it on record; the dish becomes the conversation's dish ("quán nào khác?" then finds it)
     const elsewhere = result.missingProduct ? this._offerElsewhere(session, text) : null;
@@ -599,6 +618,23 @@ ${elsewhere}` : result.replyText,
     return this.merchantRouter.routeMessage(merchantId, customerId, text);
   }
 
+  async _moduleCannotHandle(adapter, intent, text, { addedNothing = false } = {}) {
+    if (intent === "unknown") return true;
+    if (!LEGACY_PRODUCT_INTENTS.has(intent) && !(intent === "add_to_cart" && addedNothing)) return false;
+    const found = await adapter.searchProducts(text);
+    return !found.length;
+  }
+
+  /** True when the customer has been silent in a merchant context for longer than the idle TTL and no order is in progress. */
+  _merchantContextIdle(customer, session) {
+    const last = this.services.sessions.lastReplyAt?.(session.id);
+    if (!last) return false;
+    const idleMs = this.now().getTime() - Date.parse(`${String(last).replace(" ", "T")}Z`);
+    if (!(idleMs > this.merchantIdleMs)) return false;
+    const adapter = this.merchantRouter.registry.getAdapter(session.active_merchant_id);
+    return !adapter?.hasOrderInProgress?.(customer.id);
+  }
+
   async _routeToLegacy(adapter, merchantId, customerId, text, atieuState) {
     let msg = understandMessage(text);
     const memory = this.services.customerMemory;
@@ -675,8 +711,18 @@ ${elsewhere}` : result.replyText,
     }
     // Any other turn (e.g. "đặt") may have started the module's own
     // checkout: answer its questions from details the customer already gave.
-    const result = await this.merchantRouter.routeMessage(merchantId, customerId, text);
+    // A one-item order the platform understood but the module cannot read without a verb ("2 hủ tiếu xào bò")
+    // goes to it as an order, exactly like the multi-item case above.
+    const single = !moduleUnderstands && msg.intent === "add_to_cart" && msg.items.length === 1 ? withAddVerb(text) : text;
+    const cartBefore = adapter.cartQuantity?.(customerId) ?? null;
+    const result = await this.merchantRouter.routeMessage(merchantId, customerId, single);
     if (!result.ok) return result;
+    // The module's own verdict decides ownership: it did not understand the message ("unknown"), it read a
+    // product question, or an order that added nothing, naming nothing on its menu — not an ordering turn, so the
+    // Core takes it back. Never while the module waits for an ordering answer (checkout detail / confirmation).
+    const addedNothing = result.merchantIntent === "add_to_cart" && cartBefore !== null && (adapter.cartQuantity?.(customerId) ?? null) === cartBefore;
+    // an order continuation the platform itself reads ("cho 2 tô", "xác nhận", an address…) always stays here
+    if (!atieuState?.field && !atieuState?.awaitingConfirmation && !ORDER_CONTINUATION.has(msg.intent) && (await this._moduleCannotHandle(adapter, result.merchantIntent, text, { addedNothing }))) return { ...result, handBack: true };
     const filled = await this._autofillLegacyCheckout(adapter, merchantId, customerId);
     return filled ? { ...filled.result, replyText: `${filled.note}\n\n${filled.result.replyText}` } : result;
   }
@@ -953,6 +999,12 @@ ${elsewhere}` : result.replyText,
     if (!result.ok) {
       const back = this.services.sessions.returnToPlatform(session.id);
       return { replyText: "Quán này hiện không khả dụng, anh/chị tìm quán khác giúp em nha.", session: back };
+    }
+    // the place's engine could not handle it (conversation ownership): not a follow-up for this place — the Core
+    // handles it normally; a customer who was not in the place does not stay in it
+    if (result.handBack) {
+      if (session.context !== "merchant") this.services.sessions.returnToPlatform(session.id);
+      return null;
     }
     return {
       replyText: result.replyText,

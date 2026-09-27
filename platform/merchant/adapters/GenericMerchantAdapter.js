@@ -38,6 +38,8 @@ export class GenericMerchantAdapter extends MerchantModule {
     this.menuService = menuService;
     this.merchantDataService = merchantDataService;
     this.productLanguage = productLanguage;
+    this._cartService = cartService;
+    this._conversationStates = conversationStates;
     this.engine =
       cartService && orderService && conversationStates && cartCheckout
         ? new ConversationalOrderingEngine({
@@ -56,6 +58,14 @@ export class GenericMerchantAdapter extends MerchantModule {
 
   get merchantId() {
     return this._merchantId;
+  }
+
+  // Read-only: is an order being built here (a cart with items, or the engine waiting for an answer)?
+  hasOrderInProgress(customerId) {
+    const carts = this._cartService?.repos?.carts;
+    const cart = carts?.getActiveByCustomerAndMerchant(customerId, this._merchantId);
+    if (cart && carts.listItems(cart.id).length) return true;
+    return Boolean(this._conversationStates?.getByCustomer(customerId)?.pending);
   }
 
   // The platform can hand this merchant structured, multi-item messages:
