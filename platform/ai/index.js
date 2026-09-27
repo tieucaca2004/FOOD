@@ -12,11 +12,12 @@ export async function createGptFoodConcierge({ services, repos, agentSearch, mer
   const { FoodTools } = await import("./foodConcierge/foodTools.js");
   const { GptFoodConcierge } = await import("./foodConcierge/GptFoodConcierge.js");
   const deps = {
-    provider: new OpenAIProvider(),
+    provider: new OpenAIProvider({ model: platformConfig.foodAgentModel }),
     tools: new FoodTools({ services, repos, agentSearch, merchantRouter }),
     logger,
     timeoutMs: platformConfig.openaiTimeoutMs,
     maxToolTurns: platformConfig.openaiMaxToolTurns,
+    history: conversationHistory(repos, platformConfig.foodAgentHistoryTurns),
   };
   // knowledge layers only when a flag asks for them — with both flags OFF this is exactly the GPT-2 concierge
   if (platformConfig.founderKnowledgeEnabled || platformConfig.foodAliasKnowledgeEnabled || platformConfig.searchIntelligenceEnabled || contributions) {
@@ -29,6 +30,21 @@ export async function createGptFoodConcierge({ services, repos, agentSearch, mer
     }
   }
   return new GptFoodConcierge(deps);
+}
+
+/**
+ * The Agent's view of the conversation: the last turns of this session from platform_messages (the log the channels
+ * already write), oldest first, without the message being answered now. Read-only; no new state.
+ */
+export function conversationHistory(repos, turns) {
+  if (!turns || !repos?.messages?.recentForSession) return null;
+  return (session, text) => {
+    if (!session?.id) return [];
+    const rows = repos.messages.recentForSession(session.id, turns * 2 + 1);
+    // the channel logged the current message before the router ran: it is the question, not history
+    if (rows.length && rows.at(-1).direction === "in" && rows.at(-1).rawText === text) rows.pop();
+    return rows.slice(-turns * 2).map((r) => ({ role: r.direction === "in" ? "customer" : "food", text: r.rawText }));
+  };
 }
 
 export function createConciergeAIProvider() {

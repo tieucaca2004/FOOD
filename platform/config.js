@@ -36,6 +36,10 @@ export const platformConfig = {
   openaiBaseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
   openaiTimeoutMs: Number(process.env.OPENAI_TIMEOUT_MS || 15000), // whole turn, all model calls together
   openaiMaxToolTurns: Number(process.env.OPENAI_MAX_TOOL_TURNS || 6),
+  // FOOD Agent (the GPT concierge as orchestration layer): its model (default: OPENAI_MODEL) and how many earlier
+  // turns of the conversation it reads for understanding (facts still come only from tools; 0 = none)
+  foodAgentModel: process.env.FOOD_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
+  foodAgentHistoryTurns: Math.max(0, Number(process.env.FOOD_AGENT_HISTORY_TURNS ?? 6)),
   // stateless calls (store=false); reasoning items are echoed back encrypted between tool turns
   openaiIncludeReasoning: process.env.OPENAI_INCLUDE_REASONING !== "false",
 

@@ -17,6 +17,15 @@ const MAX_GUARD_RETRIES = 1;
 // one retry for a transient provider failure (network / 5xx) when time remains; rate limit and timeout fall back at once
 const MAX_TRANSIENT_RETRIES = 1;
 const RETRY_MIN_REMAINING_MS = 1500;
+// rejects with a "timeout" error after ms (the provider's own abort usually comes first)
+function withDeadline(promise, ms) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(Object.assign(new Error("model call exceeded the turn deadline"), { kind: "timeout" })), Math.max(1, ms));
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 const transient = (err) => err?.kind === "network" || (err?.kind === "http" && Number(err?.status) >= 500);
 
 export class GptFoodConcierge {
@@ -24,8 +33,10 @@ export class GptFoodConcierge {
    * @param {{provider: object, tools: import("./foodTools.js").FoodTools, registry?: import("./toolRegistry.js").FoodAIToolRegistry, logger?: object, timeoutMs?: number, maxToolTurns?: number}} deps
    *   registry: the tools the model may call (default: the FOOD registry over `tools`) — nothing else is reachable
    */
-  constructor({ provider, tools, registry = null, logger = null, timeoutMs = 15000, maxToolTurns = 6 }) {
+  constructor({ provider, tools, registry = null, logger = null, timeoutMs = 15000, maxToolTurns = 6, history = null }) {
     this.provider = provider;
+    // (session, text) -> [{role: "customer"|"food", text}]: earlier turns of this conversation (FOOD Agent context)
+    this.history = history;
     this.tools = tools;
     this.registry = registry ?? createFoodToolRegistry(tools);
     this.logger = logger;
@@ -70,7 +81,9 @@ export class GptFoodConcierge {
     meta.searchConfidence = understood?.confidence ?? null;
     const context = this._contextSummary(session, { newRequest });
     if (understood) context.search_intelligence = toGptContext(understood, results);
-    const input = [{ role: "user", content: `CONTEXT ${JSON.stringify(context)}\nCUSTOMER: ${text}` }];
+    const earlier = this._historyBlock(session, text);
+    meta.historyTurns = earlier.count;
+    const input = [{ role: "user", content: `${earlier.block}CONTEXT ${JSON.stringify(context)}\nCUSTOMER: ${text}` }];
     let toolRounds = 0;
     let guardRetries = 0;
     for (;;) {
@@ -79,7 +92,8 @@ export class GptFoodConcierge {
       let res;
       try {
         meta.modelCalls += 1;
-        res = await this.provider.respond({ instructions: FOOD_CONCIERGE_INSTRUCTIONS, input, tools: this.registry.definitions(), format: ANSWER_FORMAT, timeoutMs: remaining });
+        // the turn's deadline holds even if a provider call never settles (the webhook must never hang)
+        res = await withDeadline(this.provider.respond({ instructions: FOOD_CONCIERGE_INSTRUCTIONS, input, tools: this.registry.definitions(), format: ANSWER_FORMAT, timeoutMs: remaining }), remaining);
       } catch (err) {
         if (transient(err) && meta.transientRetries < MAX_TRANSIENT_RETRIES && this.timeoutMs - (Date.now() - started) > RETRY_MIN_REMAINING_MS) {
           meta.transientRetries += 1;
@@ -153,6 +167,21 @@ export class GptFoodConcierge {
 
   // The conversation state the model may use — the SAME stores the deterministic router uses (no second memory).
   // new_request: the customer asked for something new ("tìm …") — answer that, not the previous list (GPT-2.1)
+  // The conversation so far, for UNDERSTANDING only ("món đó", "quán thứ 2", a correction, feedback): the model is
+  // told never to take a fact from it — prices, places, menus and orders still come only from this turn's tools,
+  // and the Fact Guard still checks the answer against those tools alone.
+  _historyBlock(session, text) {
+    let turns = [];
+    try {
+      turns = this.history ? this.history(session, text) ?? [] : [];
+    } catch {
+      turns = []; // history is a convenience: it never breaks a turn
+    }
+    if (!turns.length) return { block: "", count: 0 };
+    const lines = turns.map((t) => `${t.role === "customer" ? "Khách" : "FOOD"}: ${String(t.text).replace(/\s+/g, " ").slice(0, 400)}`);
+    return { block: `HISTORY (earlier turns, for understanding only — never a source of facts; use the tools)\n${lines.join("\n")}\n\n`, count: turns.length };
+  }
+
   _contextSummary(session, { newRequest = false } = {}) {
     const previous = session ? this.tools.services.sessions.getKnowledgeContext(session.id) : null;
     return {
