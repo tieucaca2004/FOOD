@@ -28,6 +28,9 @@ export { readContext, withSearchState, withPending } from "./searchContext.js";
 export { toGptContext, SEARCH_INTELLIGENCE_RULES } from "./gptContext.js";
 
 const REFERENCE_WORDS = new Set(["do", "nay", "kia", "ay"]);
+// what the customer ASKS FOR, never a place's name: "(cho tôi) danh sách / danh mục / tổng hợp (quán …)", "địa điểm (bán …)"
+// — two-word phrases only (folded), so a place really called "Quán Danh" / "Tổng …" keeps its name words (FORM 11)
+const REQUEST_PHRASES = new Set(["danh sach", "danh muc", "tong hop", "dia diem"]);
 const REFERENCE_HEADS = new Set(["quan", "mon", "cho", "tiem", "cai"]);
 
 // Which existing FOOD tool answers the plan (the GPT concierge's tool map; V2 decides, the model may follow)
@@ -117,6 +120,7 @@ export class SearchIntelligenceV2 {
     const exclusionIdx = this._exclusionTokens(input);
     exclusionIdx.forEach((i) => blocked.add(i));
     this._ordinalTokens(input).forEach((i) => blocked.add(i));
+    this._requestPhraseTokens(input).forEach((i) => blocked.add(i));
     // a location FOOD cannot resolve ("gần biển", "trung tâm") is a location phrase, never a place's name words
     if (intent.unsupportedArea) {
       const words = intent.unsupportedArea.split(" ");
@@ -334,6 +338,14 @@ export class SearchIntelligenceV2 {
   }
 
   // "quán đầu tiên", "quán thứ 2", "quán cuối": list positions, never name words
+  /** Token indexes of list / discovery request phrases ("danh sách", "danh mục", "tổng hợp", "địa điểm"). */
+  _requestPhraseTokens(input) {
+    const f = input.tokens.map((t) => t.folded);
+    const out = [];
+    for (let i = 0; i + 1 < f.length; i++) if (REQUEST_PHRASES.has(`${f[i]} ${f[i + 1]}`)) out.push(input.tokens[i].i, input.tokens[i + 1].i);
+    return out;
+  }
+
   _ordinalTokens(input) {
     const t = input.tokens;
     const f = t.map((x) => x.folded);
