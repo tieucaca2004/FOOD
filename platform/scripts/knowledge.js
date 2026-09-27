@@ -54,7 +54,7 @@ else if (command === "init") {
 } else if (command?.startsWith("founder-")) {
   await founderCommand(command, process.argv.slice(3));
 } else {
-  console.log("Usage: knowledge.js check | init | ingest-status | ingest-review [--status review] | ingest-decide <id> approve|reject --by <person> [--note …] | ingest-contributor <channel> <userId> <admin|editor|verified|member|blocked> --by <person> | contrib-review [--lifecycle CANDIDATE|CONFLICT_REVIEW|APPROVED|PUBLISHED|REJECTED] | contrib-show <id> | contrib-submissions | contrib-decide <id> approve|reject --by <person> | contrib-link <id> merchant|food <targetId> --by <person> | contrib-conflict <id> --by <person> [--note …] | contrib-apply <id> --by <person> [--allow-conflict] | founder-add --type <POLICY|ADVICE_STYLE|FAQ|FOOD_RECOMMENDATION|INTERNAL_NOTE> --title … (--text … | --file <path>) --author <person> [--scope … --ref … --audience … --priority … --valid-from … --valid-to … --revise <id>] | founder-list [--status … --type … --audience … --id <id> --active] | founder-review <id> --by <person> [--return --note …] | founder-approve <id> --by <person> [--ack-warnings --note …] | founder-retire <id> --by <person> --reason …");
+  console.log("Usage: knowledge.js check | init | ingest-status | ingest-review [--status review] | ingest-decide <id> approve|reject --by <person> [--note …] | ingest-contributor <channel> <userId> <admin|editor|verified|member|blocked> --by <person> | contrib-review [--lifecycle CANDIDATE|CONFLICT_REVIEW|APPROVED|PUBLISHED|REJECTED] | contrib-show <id> | contrib-submissions | contrib-decide <id> approve|reject --by <person> | contrib-link <id> merchant|food <targetId> --by <person> | contrib-conflict <id> --by <person> [--note …] | contrib-apply <id> --by <person> [--allow-conflict] | contrib-contributor <telegram|zalo> <platformUserId> <admin|editor|verified|member|blocked> --by <person> | founder-add --type <POLICY|ADVICE_STYLE|FAQ|FOOD_RECOMMENDATION|INTERNAL_NOTE> --title … (--text … | --file <path>) --author <person> [--scope … --ref … --audience … --priority … --valid-from … --valid-to … --revise <id>] | founder-list [--status … --type … --audience … --id <id> --active] | founder-review <id> --by <person> [--return --note …] | founder-approve <id> --by <person> [--ack-warnings --note …] | founder-retire <id> --by <person> --reason …");
   process.exitCode = command ? 1 : 0;
 }
 
@@ -129,6 +129,18 @@ async function contributionCommand(cmd, args) {
       else throw new Error("contrib-link <id> merchant|food <targetId> --by <person>");
     } else if (cmd === "contrib-conflict") console.log(show(review.markConflict(Number(a), { by: flag("by"), note: flag("note") })));
     else if (cmd === "contrib-apply") console.log(JSON.stringify(review.apply(Number(a), { by: flag("by"), allowConflict: args.includes("--allow-conflict") }), null, 2));
+    else if (cmd === "contrib-contributor") {
+      // who may send "# ..." Knowledge Input: the platform user id is given here and stored ONLY as its keyed hash
+      const [channel, userId, role] = [a, b, c];
+      if (!["telegram", "zalo"].includes(channel) || !userId || !["admin", "editor", "verified", "member", "blocked"].includes(role)) throw new Error("contrib-contributor <telegram|zalo> <platformUserId> <admin|editor|verified|member|blocked> --by <person>");
+      if (!flag("by")) throw new Error("--by <person> is required");
+      const { contributorHasherFromEnv } = await import("../knowledge/ingestion/contributorHash.js");
+      const hasher = contributorHasherFromEnv({ key: platformConfig.contributorHashKey, kid: platformConfig.contributorHashKid });
+      if (!hasher) throw new Error("KNOWLEDGE_CONTRIBUTOR_HASH_KEY is missing or shorter than 32 bytes: set it in .env first");
+      const hash = hasher.user(channel, userId);
+      db.prepare(`INSERT INTO kb_ingest_contributors (channel, external_user_id, role, added_by) VALUES (?, ?, ?, ?) ON CONFLICT(channel, external_user_id) DO UPDATE SET role = excluded.role, added_by = excluded.added_by`).run(channel, hash, role, flag("by"));
+      console.log(`contributor ${channel}:${hash.slice(0, 11)}… -> ${role}`);
+    }
     else throw new Error(`unknown command ${cmd}`);
   } catch (err) {
     console.error(err.message);

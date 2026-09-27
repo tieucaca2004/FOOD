@@ -9,6 +9,7 @@ import { contributionKit, FixtureImageUnderstanding } from "../helpers/contribut
 import { sanitizeReading, DOCUMENT_TYPES } from "../../ai/ingest/ImageUnderstandingProvider.js";
 import { imageFindings, isApproximate } from "../../knowledge/ingestion/imageFindings.js";
 import { classifyContributionText, classifyReply } from "../../knowledge/ingestion/contributionIntent.js";
+import { explicitPlace } from "../../knowledge/ingestion/textClaims.js";
 import { parsePrice } from "../../knowledge/price.js";
 
 function flow(kit, files, { caption = null, text = null } = {}) {
@@ -253,4 +254,10 @@ test("OPENING HOURS (live finding): an hour range without an opening-hours cue i
   const g = kit.ingestion.receive({ channel: "telegram", chatId: "-100777", messageId: "g1", senderId: "501", text: "Quán Bún Cá Cô Ba cúp điện từ 8h đến 11h", raw: {} });
   await kit.ingestion.drain();
   assert.equal(kit.db.prepare(`SELECT COUNT(*) AS n FROM kb_ingest_candidates WHERE message_id = ? AND kind = 'opening_hours'`).get(g.id).n, 1);
+});
+
+test("PLACE NAME stops at the end of its line (multi-line '#' input)", () => {
+  assert.equal(explicitPlace("Quán Bún Bò ABC\nĐịa chỉ: 123 Nguyễn Trãi"), "Bún Bò ABC");
+  assert.equal(explicitPlace("Quán Test ABC\nBún bò 45k"), "Test ABC");
+  assert.equal(explicitPlace("menu Quán Bún Cá Cô Ba ngon"), "Bún Cá Cô Ba");
 });

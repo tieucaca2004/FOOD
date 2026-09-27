@@ -34,6 +34,20 @@ function hasHoursCue(text, segment) {
   return at > 0 && HOURS_CUE.test(lines[at - 1]);
 }
 
+const BARE_ADDRESS = /^\s*địa\s+chỉ\s+(?!mới(?:\s|$|[:：]))([^:：\s].*)$/iu;
+function withBareAddresses(text, findings) {
+  let out = findings;
+  for (const line of String(text ?? "").split(/\r?\n/)) {
+    const m = line.match(BARE_ADDRESS);
+    if (!m) continue;
+    const segment = line.trim();
+    if (out.some((f) => f.kind === "address" && f.segment === segment)) continue;
+    const value = m[1].trim().replace(/[.;,]+$/u, "");
+    out = [...out.filter((f) => f.segment !== segment), { segment, kind: "address", rawValue: value, normalizedValue: value }];
+  }
+  return out;
+}
+
 export class KnowledgeIngestion {
   /**
    * @param {object} deps
@@ -381,6 +395,8 @@ export class KnowledgeIngestion {
     // a customer's hour range is opening hours only next to an opening-hours cue ("Cúp điện từ 8h đến 11h" is not)
     const notHours = customer ? findings.filter((f) => f.kind === "opening_hours" && !String(f.normalizedValue).startsWith("closed:") && !hasHoursCue(text, f.segment)) : [];
     if (notHours.length) findings = findings.filter((f) => !notHours.includes(f));
+    // "Địa chỉ 123 Nguyễn Trãi" without a colon, in a contributor's own words: an address line (never a price)
+    if (customer && extraction.kind === "text_rule") findings = withBareAddresses(text, findings);
     const kind = assertion ?? (extraction.kind === "fusion" ? "OBSERVED" : "USER_ASSERTION");
     const extractionId = this._extraction({
       messageId: message.id,

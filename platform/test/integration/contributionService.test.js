@@ -14,8 +14,10 @@ function service(kit, { now } = {}) {
   const router = { handle: async ({ text }) => ({ replyText: `ROUTER:${text}`, session: { id: 1, context: "platform" } }) };
   const customer = { zalo_user_id: "telegram:555" };
   const session = { id: 1, context: "platform" };
+  // 555 is an authorised contributor; a contribution image is "# <caption>"
+  kit.ingestion.setContributor({ channel: "telegram", userId: kit.hasher.user("telegram", "555"), role: "editor", addedBy: "test" });
   const photo = (file, caption = null, id = String(Math.random())) =>
-    svc.handle({ customer, session, text: caption ?? "", inbound: { channel: "telegram", updateId: id, messageId: id, externalUserId: "555", externalChatId: "555", timestamp: 1790499540, text: caption, attachments: [{ type: "image", ref: file, mimeType: "image/jpeg" }], mediaGroupId: null, unsupported: null } }, router);
+    svc.handle({ customer, session, text: caption ?? "", inbound: { channel: "telegram", updateId: id, messageId: id, externalUserId: "555", externalChatId: "555", timestamp: 1790499540, text: `# ${caption ?? ""}`.trim(), attachments: [{ type: "image", ref: file, mimeType: "image/jpeg" }], mediaGroupId: null, unsupported: null } }, router);
   const say = (text) => svc.handle({ customer, session, text }, router);
   return { svc, sent, photo, say };
 }
@@ -94,7 +96,7 @@ test("LIMIT: at most 5 images of one album are stored; the rest are dropped with
   const { svc } = service(kit);
   const router = { handle: async () => ({ replyText: "ROUTER", session: {} }) };
   const send = (i) =>
-    svc.handle({ customer: { zalo_user_id: "telegram:555" }, session: { id: 1, context: "platform" }, text: "", inbound: { channel: "telegram", updateId: `u${i}`, messageId: `m${i}`, externalUserId: "555", externalChatId: "555", timestamp: 1790499540, text: null, attachments: [{ type: "image", ref: "menu_clean.jpg", mimeType: "image/jpeg" }], mediaGroupId: "album-1", unsupported: null } }, router);
+    svc.handle({ customer: { zalo_user_id: "telegram:555" }, session: { id: 1, context: "platform" }, text: "", inbound: { channel: "telegram", updateId: `u${i}`, messageId: `m${i}`, externalUserId: "555", externalChatId: "555", timestamp: 1790499540, text: i === 1 ? "#" : null, attachments: [{ type: "image", ref: "menu_clean.jpg", mimeType: "image/jpeg" }], mediaGroupId: "album-1", unsupported: null } }, router);
   const replies = [];
   for (let i = 1; i <= 7; i++) replies.push(await send(i));
   assert.equal(kit.store.messages(1).length, 5);

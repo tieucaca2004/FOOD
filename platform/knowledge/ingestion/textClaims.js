@@ -23,7 +23,8 @@ const AMOUNT =
 // a VND price outside this is still read, but flagged (a typo, an OCR slip, or an instruction written as text)
 const PLAUSIBLE = { min: 1000, max: 20_000_000 };
 // no /i: with it, \p{Lu} would also match lower case
-const PLACE_MARKER = /(?:^|[\s,.;:!?(])(?:[Qq]uán|[Tt]iệm|[Nn]hà hàng|[Hh]àng)\s+((?:\p{Lu}|\d)[\p{L}\p{M}\d'’.&-]*(?:\s+(?:\p{Lu}|\d)[\p{L}\p{M}\d'’.&-]*)*)/u;
+// a name never continues onto the next line ("Quán Bún Bò ABC\nĐịa chỉ: …" is "Bún Bò ABC", not "Bún Bò ABC Địa")
+const PLACE_MARKER = /(?:^|[\s,.;:!?(])(?:[Qq]uán|[Tt]iệm|[Nn]hà hàng|[Hh]àng)[ \t]+((?:\p{Lu}|\d)[\p{L}\p{M}\d'’.&-]*(?:[ \t]+(?:\p{Lu}|\d)[\p{L}\p{M}\d'’.&-]*)*)/u;
 const ADDRESS = [/(?:chuyển|dời|đổi)\s+(?:địa\s+chỉ\s+|quán\s+)?(?:sang|qua|về|đến|tới)\s+(.+)$/iu, /địa\s+chỉ(?:\s+mới)?\s*[:：]\s*(.+)$/iu];
 const HOURS_RANGE = /(?<![\p{L}\d])(\d{1,2})\s*(?:h|g|giờ|:)\s*(\d{2})?\s*(?:-|–|—|đến|tới|→|->)\s*(\d{1,2})\s*(?:h|g|giờ|:)?\s*(\d{2})?(?![\p{L}\d])/iu;
 const CLOSED_DAY = /(?<![\p{L}])nghỉ\s+((?:thứ\s+(?:hai|ba|tư|năm|sáu|bảy|[2-7]))|chủ\s+nhật|cn)(?![\p{L}])/iu;

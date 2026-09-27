@@ -22,6 +22,15 @@ const PRICE_QUESTION = /(giá|gia\s|bao nhiêu|bao nhieu|menu|thực đơn|thuc 
 const ASK_CHOICE = "Trả lời “có” / “lưu” để lưu, hoặc “không” / “bỏ qua”.";
 const UNSUPPORTED = "Dạ hiện em chỉ đọc được ảnh (JPG / PNG) và tin nhắn chữ ạ.";
 const DAY_MS = 86_400_000;
+// "# ..." = Knowledge Input (deterministic): the first non-whitespace character of the text / caption is "#".
+// Only an authorised contributor (kb_ingest_contributors role admin / editor / verified) goes to the knowledge pipeline.
+const KNOWLEDGE_INPUT = /^\s*#/u;
+const CONTRIBUTOR_ROLES = new Set(["admin", "editor", "verified"]);
+const NOT_ALLOWED = "Dạ tin nhắn bắt đầu bằng # dùng để cập nhật dữ liệu, chỉ dành cho cộng tác viên của FOOD ạ. Anh/chị cần tìm món hay quán thì nhắn bình thường (không có #) giúp em nhé.";
+const EMPTY_INPUT = "Dạ anh/chị gửi # kèm nội dung (tên quán, địa chỉ, món, giá) hoặc kèm ảnh menu giúp em nhé.";
+export const isKnowledgeInput = (text) => typeof text === "string" && KNOWLEDGE_INPUT.test(text);
+/** The content after the "#" prefix (the prefix and the whitespace around it are removed). */
+export const stripKnowledgePrefix = (text) => String(text ?? "").replace(/^\s*#\s*/u, "");
 // words of a price / menu question that are not the dish ("giá bún bò bao nhiêu" -> bún bò)
 const QUESTION_WORDS = new Set("gia bao nhieu bn the nao quan mon co khong ko k may tien menu thuc don a ban oi vay la mot to dia phan cho em anh chi minh o day do nay kia hien nay hom nua sao".split(" "));
 
@@ -75,6 +84,12 @@ export class ContributionService {
     }
   }
 
+  /** An authorised contributor: role admin / editor / verified in kb_ingest_contributors (keyed hash for customers). */
+  isContributor(who) {
+    const role = this.store.ingestion?.roleOf(who.channel, this.hasher.user(who.channel, who.userId)) ?? "member";
+    return CONTRIBUTOR_ROLES.has(role);
+  }
+
   identity(customer, inbound) {
     if (inbound) return { channel: inbound.channel, userId: inbound.externalUserId, chatId: inbound.externalChatId };
     const z = String(customer?.zalo_user_id ?? "");
@@ -89,15 +104,23 @@ export class ContributionService {
     if (inbound && (inbound.attachments?.length || inbound.unsupported)) {
       if (!who) return { replyText: null, session };
       try {
-        return await this._onMedia({ session, inbound, who });
+        const ki = isKnowledgeInput(inbound.text);
+        if (ki && !this.isContributor(who)) return { replyText: NOT_ALLOWED, session, contribution: { status: "not_authorized" } };
+        // no "#": an image is NOT knowledge (customer media flow as before) — except the next images of an authorised
+        // contributor's open submission (album photos 2..n carry no caption)
+        const open = !ki && this.isContributor(who) ? this.store.open(who.channel, this.hasher.user(who.channel, who.userId)) : null;
+        if (!ki && !open) return { replyText: null, session, contribution: { status: "not_knowledge_input" } };
+        return await this._onMedia({ session, inbound: ki ? { ...inbound, text: stripKnowledgePrefix(inbound.text) || null, knowledgeInput: true } : inbound, who });
       } catch (err) {
         this._warn("media contribution failed", err);
         return { replyText: "Dạ em chưa nhận được ảnh này, bạn gửi lại giúp em nhé.", session, contribution: { status: "error" } };
       }
     }
     if (who && typeof text === "string" && text.trim()) {
+      const ki = isKnowledgeInput(text);
+      if (ki && !this.isContributor(who)) return { replyText: NOT_ALLOWED, session, contribution: { status: "not_authorized" } };
       try {
-        const r = await this._onText({ session, text, who });
+        const r = await this._onText({ session, text: ki ? stripKnowledgePrefix(text) : text, who, knowledgeInput: ki });
         if (r) return r;
       } catch (err) {
         this._warn("text contribution failed", err); // never blocks the normal conversation
@@ -140,7 +163,7 @@ export class ContributionService {
       caption: inbound.text,
       mediaGroupId: inbound.mediaGroupId,
       media: inbound.attachments.map((a) => ({ type: "photo", fileId: a.ref, mimeType: a.mimeType })),
-      raw: minimisedRaw(inbound),
+      raw: { ...minimisedRaw(inbound), ...(inbound.knowledgeInput && { knowledge_input: { prefix: "#" } }) },
     });
     if (r.status === "duplicate") return { replyText: null, session, contribution: { status: "duplicate", submissionId: s.id } };
     this._log("image received", { submissionId: s.id, channel: who.channel, images: inbound.attachments.length });
@@ -225,7 +248,8 @@ export class ContributionService {
     const label = TYPE_LABEL[reading.documentTypes[0]] ?? (mediaCount ? "ảnh" : "thông tin");
     const lines = this._summary(useful, reading.foods, placeText);
     const conflicts = this._catalogConflicts(useful, place);
-    const known = place && (place.status === "resolved" || place.catalogMerchantId) && place.class !== "AMBIGUOUS";
+    const stated = reading.places.some((p) => p.assertion === "USER_ASSERTION" && p.place === placeText);
+    const known = place && place.class !== "AMBIGUOUS" && (place.status === "resolved" || place.catalogMerchantId || (stated && place.class === "NEW_MERCHANT_CANDIDATE"));
     if (known) {
       this.store.transition(s.id, "WAITING_FOR_CONFIRMATION", {
         reason: "place_known",
@@ -275,7 +299,7 @@ export class ContributionService {
 
   // ------------------------------------------------------------------ text
 
-  async _onText({ session, text, who }) {
+  async _onText({ session, text, who, knowledgeInput = false }) {
     const strict = session?.context === "merchant" && Boolean(session?.active_merchant_id);
     const senderHash = this.hasher.user(who.channel, who.userId);
     const s = this.store.open(who.channel, senderHash);
@@ -320,21 +344,21 @@ export class ContributionService {
       }
       return null; // an unrelated message: the normal conversation; the submission waits (and expires)
     }
-    if (strict) return null;
-    if (this.ingest.classifyReply(text).kind === "ERASE") return reply(this._erase(who, senderHash), { status: "erased" });
-    const c = this.ingest.classifyText(text);
-    if (c.kind !== "CONTRIBUTION") return null;
+    if (this.ingest.classifyReply(text).kind === "ERASE" && !knowledgeInput) return reply(this._erase(who, senderHash), { status: "erased" });
+    // only "# ..." from an authorised contributor becomes knowledge; any other text is a customer query
+    if (!knowledgeInput) return null;
+    if (!text.trim()) return reply(EMPTY_INPUT, { status: "empty_knowledge_input" });
     let sub = this.store.create({ channel: who.channel, senderHash, kid: this.hasher.kid, sessionRef: session?.id ?? null });
-    sub = this.store.transition(sub.id, "EXTRACTING", { actor: "system", reason: "text_contribution" });
-    this._addText(sub, who, text);
+    sub = this.store.transition(sub.id, "EXTRACTING", { actor: "system", reason: "knowledge_input" });
+    this._addText(sub, who, text, { knowledgeInput: true });
     await this.ingest.drain();
     this._log("text contribution", { submissionId: sub.id, channel: who.channel });
     return { replyText: this._afterExtraction(this.store.get(sub.id)), session, contribution: { submissionId: sub.id, status: this.store.get(sub.id).status } };
   }
 
-  _addText(s, who, text) {
+  _addText(s, who, text, { knowledgeInput = false } = {}) {
     const id = `t:${this.now().getTime()}:${Math.random().toString(36).slice(2, 8)}`;
-    const r = this.store.addMessage(s, { chatId: this.hasher.chat(who.channel, who.chatId), messageId: id, sentAt: this.now().toISOString(), text, raw: { channel: who.channel, message: { message_id: id } } });
+    const r = this.store.addMessage(s, { chatId: this.hasher.chat(who.channel, who.chatId), messageId: id, sentAt: this.now().toISOString(), text, raw: { channel: who.channel, message: { message_id: id }, ...(knowledgeInput && { knowledge_input: { prefix: "#" } }) } });
     return r.id;
   }
 
