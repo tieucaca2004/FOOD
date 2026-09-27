@@ -181,7 +181,8 @@ test("ISOLATION: Food Knowledge names / entities untouched; only the adapter imp
   assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
   const files = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (["node_modules", "test"].includes(e.name) ? [] : files(path.join(dir, e.name))) : e.name.endsWith(".js") ? [path.join(dir, e.name)] : []));
   const importers = [...files(path.join(REPO, "platform")), ...files(path.join(REPO, "src"))].filter((f) => !f.includes(`${path.sep}knowledge${path.sep}terms${path.sep}`) && /knowledge\/terms\//.test(fs.readFileSync(f, "utf8")));
-  assert.deepEqual(importers.map((f) => path.relative(REPO, f).replace(/\\/g, "/")), ["platform/services/foodKnowledgeAdapter.js"]); // only the adapter (read-only matcher)
+  // exactly: the read-only matcher adapter, the single DRAFT candidate writer (FOOD Agent learning), the human review CLI
+  assert.deepEqual(importers.map((f) => path.relative(REPO, f).replace(/\\/g, "/")), ["platform/scripts/knowledge.js", "platform/services/foodKnowledgeAdapter.js", "platform/services/knowledgeIngestAdapter.js"]);
 });
 
 test("REGIONAL NAME: how a region calls a dish names it anywhere, and says whether the conversation is in that region", () => {

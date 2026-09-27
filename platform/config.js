@@ -40,6 +40,9 @@ export const platformConfig = {
   // turns of the conversation it reads for understanding (facts still come only from tools; 0 = none)
   foodAgentModel: process.env.FOOD_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
   foodAgentHistoryTurns: Math.max(0, Number(process.env.FOOD_AGENT_HISTORY_TURNS ?? 6)),
+  // controlled learning: the Agent may PROPOSE how a dish is called (DRAFT term relations in the WORKING knowledge DB,
+  // for a person to approve); it never publishes. OFF by default; only when the Agent itself runs.
+  foodAgentLearningEnabled: process.env.FOOD_AGENT_LEARNING_ENABLED === "true",
   // stateless calls (store=false); reasoning items are echoed back encrypted between tool turns
   openaiIncludeReasoning: process.env.OPENAI_INCLUDE_REASONING !== "false",
 

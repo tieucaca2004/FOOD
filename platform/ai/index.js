@@ -18,6 +18,7 @@ export async function createGptFoodConcierge({ services, repos, agentSearch, mer
     timeoutMs: platformConfig.openaiTimeoutMs,
     maxToolTurns: platformConfig.openaiMaxToolTurns,
     history: conversationHistory(repos, platformConfig.foodAgentHistoryTurns),
+    learning: await agentLearning({ agentSearch, logger }),
   };
   // knowledge layers only when a flag asks for them — with both flags OFF this is exactly the GPT-2 concierge
   if (platformConfig.founderKnowledgeEnabled || platformConfig.foodAliasKnowledgeEnabled || platformConfig.searchIntelligenceEnabled || contributions) {
@@ -30,6 +31,21 @@ export async function createGptFoodConcierge({ services, repos, agentSearch, mer
     }
   }
   return new GptFoodConcierge(deps);
+}
+
+/** Controlled learning for the Agent (FOOD_AGENT_LEARNING_ENABLED): DRAFT candidates only, read-only APPROVED matcher. */
+async function agentLearning({ agentSearch, logger }) {
+  if (!platformConfig.foodAgentLearningEnabled) return null;
+  try {
+    const { createTermLearning } = await import("../services/knowledgeIngestAdapter.js");
+    const { createAgentLearning } = await import("./foodConcierge/learning.js");
+    const sink = createTermLearning({ dbPath: platformConfig.knowledgeIngestDbPath, rawRoot: platformConfig.knowledgeIngestRawRoot, hashKey: platformConfig.contributorHashKey, hashKid: platformConfig.contributorHashKid });
+    logger?.info?.("APP", "food agent learning enabled (candidates only)", { dbPath: platformConfig.knowledgeIngestDbPath });
+    return createAgentLearning({ sink, matcher: () => agentSearch?.foodKnowledge?.termMatcher?.() ?? null, logger });
+  } catch (err) {
+    logger?.warn?.("APP", "food agent learning NOT enabled", { error: String(err?.message ?? err).slice(0, 160) });
+    return null;
+  }
 }
 
 /**

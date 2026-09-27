@@ -7,6 +7,10 @@ import { contributorHasherFromEnv } from "../knowledge/ingestion/contributorHash
 import { classifyContributionText, classifyReply } from "../knowledge/ingestion/contributionIntent.js";
 import { IMAGE_LIMITS } from "../knowledge/ingestion/imageCheck.js";
 import { normalizeName } from "../knowledge/text.js";
+import { TermRelationService } from "../knowledge/terms/termRelationService.js";
+import { termKey } from "../knowledge/terms/termNormalize.js";
+import fs from "node:fs";
+import crypto from "node:crypto";
 
 // The ONLY bridge from a chat channel into Knowledge Ingestion (loaded by
 // server.js only when KNOWLEDGE_INGEST_ENABLED=true, and only for the chat ids
@@ -170,3 +174,46 @@ export function createContributionIngest({ dbPath, rawRoot, hashKey, hashKid = "
 }
 
 export { telegramFileFetcher };
+
+/**
+ * FOOD Agent controlled learning: the ONLY writer of Agent learning candidates. A candidate is a DRAFT term relation
+ * (the existing lifecycle: DRAFT -> REVIEW -> APPROVED by a person, or RETIRED) in the WORKING knowledge DB — never
+ * the runtime snapshot, never published by the Agent. Evidence = the verbatim customer message kept as a purgeable raw
+ * text file (referenced by its sha256); provenance = channel + session + a keyed hash of the customer (never a raw id).
+ * The same term for the same dish seen again adds evidence to the open candidate instead of a duplicate.
+ * @param {{dbPath: string, rawRoot: string, hashKey?: string, hashKid?: string}} opts
+ */
+export function createTermLearning({ dbPath, rawRoot, hashKey = "", hashKid = "k1" }) {
+  const db = createKnowledgeConnection(dbPath);
+  db.pragma("busy_timeout = 5000");
+  runKnowledgeMigrations(db);
+  const terms = new TermRelationService({ db });
+  const hasher = contributorHasherFromEnv({ key: hashKey, kid: hashKid });
+  return {
+    propose({ foodEntityId, term, relationType, regionId = null, quote, provenance = {} }) {
+      const text = String(quote ?? "").trim();
+      if (!text) return { recorded: false, reason: "NO_EVIDENCE" };
+      const sha = crypto.createHash("sha256").update(text).digest("hex");
+      const file = path.resolve(rawRoot, "learning", `${sha}.txt`);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      if (!fs.existsSync(file)) fs.writeFileSync(file, text, { flag: "wx" });
+      const who = hasher && provenance.userId ? hasher.user(provenance.channel, provenance.userId) : "anonymous";
+      const actor = `agent-learning:${provenance.channel ?? "?"}:session=${provenance.sessionId ?? "?"}:user=${who}`;
+      const evidence = { sourceKind: "text", sourceRef: sha, quote: text };
+      const open = terms.list({ foodEntityId }).find((r) => ["DRAFT", "REVIEW"].includes(r.status) && r.term_key === termKey(term) && r.relation_type === relationType);
+      try {
+        if (open) {
+          const seen = db.prepare(`SELECT 1 FROM kb_term_evidence WHERE relation_id = ? AND source_ref = ?`).get(open.id, sha);
+          if (!seen) terms.linkEvidence(open.id, evidence, actor);
+          return { recorded: true, id: open.id, status: open.status, reason: "MORE_EVIDENCE" };
+        }
+        const r = terms.propose({ foodEntityId, term, relationType, regionId, confidence: 0.3, createdBy: actor, proposedByKind: "rule", evidence: [evidence] });
+        return { recorded: true, id: r.id, status: r.status };
+      } catch (err) {
+        return { recorded: false, reason: err?.code ?? "INVALID" }; // the existing validation said no (generic word, place, number…)
+      }
+    },
+    close: () => db.close(),
+  };
+}
+

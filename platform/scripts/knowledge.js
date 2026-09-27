@@ -47,6 +47,8 @@ else if (command === "init") {
   const applied = db.prepare(`SELECT name FROM kb_schema_migrations ORDER BY name`).all().map((r) => r.name);
   db.close();
   console.log(`${existed ? "Migrated" : "Created"} local knowledge DB at ${DEFAULT_KNOWLEDGE_DB_PATH} (migrations: ${applied.join(", ")})`);
+} else if (command?.startsWith("term-")) {
+  await termCommand(command, process.argv.slice(3));
 } else if (command?.startsWith("contrib-")) {
   await contributionCommand(command, process.argv.slice(3));
 } else if (command?.startsWith("ingest-")) {
@@ -54,7 +56,7 @@ else if (command === "init") {
 } else if (command?.startsWith("founder-")) {
   await founderCommand(command, process.argv.slice(3));
 } else {
-  console.log("Usage: knowledge.js check | init | ingest-status | ingest-review [--status review] | ingest-decide <id> approve|reject --by <person> [--note …] | ingest-contributor <channel> <userId> <admin|editor|verified|member|blocked> --by <person> | contrib-review [--lifecycle CANDIDATE|CONFLICT_REVIEW|APPROVED|PUBLISHED|REJECTED] | contrib-show <id> | contrib-submissions | contrib-decide <id> approve|reject --by <person> | contrib-link <id> merchant|food <targetId> --by <person> | contrib-conflict <id> --by <person> [--note …] | contrib-apply <id> --by <person> [--allow-conflict] | contrib-contributor <telegram|zalo> <platformUserId> <admin|editor|verified|member|blocked> --by <person> | founder-add --type <POLICY|ADVICE_STYLE|FAQ|FOOD_RECOMMENDATION|INTERNAL_NOTE> --title … (--text … | --file <path>) --author <person> [--scope … --ref … --audience … --priority … --valid-from … --valid-to … --revise <id>] | founder-list [--status … --type … --audience … --id <id> --active] | founder-review <id> --by <person> [--return --note …] | founder-approve <id> --by <person> [--ack-warnings --note …] | founder-retire <id> --by <person> --reason …");
+  console.log("Usage: knowledge.js check | init | ingest-status | ingest-review [--status review] | ingest-decide <id> approve|reject --by <person> [--note …] | ingest-contributor <channel> <userId> <admin|editor|verified|member|blocked> --by <person> | contrib-review [--lifecycle CANDIDATE|CONFLICT_REVIEW|APPROVED|PUBLISHED|REJECTED] | contrib-show <id> | contrib-submissions | contrib-decide <id> approve|reject --by <person> | contrib-link <id> merchant|food <targetId> --by <person> | contrib-conflict <id> --by <person> [--note …] | contrib-apply <id> --by <person> [--allow-conflict] | contrib-contributor <telegram|zalo> <platformUserId> <admin|editor|verified|member|blocked> --by <person> | term-candidates [--status DRAFT|REVIEW|APPROVED|RETIRED] | term-show <id> | term-submit <id> --by <person> | term-approve <id> --by <person> [--ack-ambiguous] | term-reject <id> --by <person> [--reason …] | founder-add --type <POLICY|ADVICE_STYLE|FAQ|FOOD_RECOMMENDATION|INTERNAL_NOTE> --title … (--text … | --file <path>) --author <person> [--scope … --ref … --audience … --priority … --valid-from … --valid-to … --revise <id>] | founder-list [--status … --type … --audience … --id <id> --active] | founder-review <id> --by <person> [--return --note …] | founder-approve <id> --by <person> [--ack-warnings --note …] | founder-retire <id> --by <person> --reason …");
   process.exitCode = command ? 1 : 0;
 }
 
@@ -92,6 +94,33 @@ async function ingestCommand(cmd, args) {
       ingestion.setContributor({ channel, userId, role, addedBy: flag("by") });
       console.log(`contributor ${channel}:${userId} -> ${role}`);
     } else throw new Error(`unknown command ${cmd}`);
+  } catch (err) {
+    console.error(err.message);
+    process.exitCode = 1;
+  } finally {
+    db.close();
+  }
+}
+
+// Learning candidates (term relations) review — a person's tool over the existing TermRelationService on the WORKING DB.
+// DRAFT (Agent / rule proposals) -> term-submit -> REVIEW -> term-approve (a person) -> APPROVED; term-reject -> RETIRED.
+async function termCommand(cmd, args) {
+  const { platformConfig } = await import("../config.js");
+  const { TermRelationService } = await import("../knowledge/terms/termRelationService.js");
+  const flag = (name, fallback = null) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
+  const db = createKnowledgeConnection(platformConfig.knowledgeIngestDbPath);
+  db.pragma("busy_timeout = 5000");
+  runKnowledgeMigrations(db, { allowRuntime: process.argv.includes("--allow-runtime") });
+  const terms = new TermRelationService({ db });
+  const show = (r) => `#${r.id} [${r.status}] "${r.term}" -> ${r.canonical_name ?? "-"} (${r.relation_type}${r.region_id ? ` @${r.region_id}` : ""}) by ${r.created_by}`;
+  try {
+    const [a] = args;
+    if (cmd === "term-candidates") for (const r of terms.list({ status: flag("status", "DRAFT") })) console.log(show(r));
+    else if (cmd === "term-show") console.log(JSON.stringify({ relation: terms.get(Number(a)), evidence: db.prepare(`SELECT source_kind, source_ref, quote, created_at FROM kb_term_evidence WHERE relation_id = ?`).all(Number(a)) }, null, 2));
+    else if (cmd === "term-submit") console.log(show(terms.submitForReview(Number(a), flag("by"))));
+    else if (cmd === "term-approve") console.log(show(terms.approve(Number(a), { by: flag("by"), ackAmbiguous: args.includes("--ack-ambiguous"), note: flag("note") })));
+    else if (cmd === "term-reject") console.log(show(terms.retire(Number(a), { by: flag("by"), reason: flag("reason") ?? "rejected" })));
+    else throw new Error(`unknown command ${cmd}`);
   } catch (err) {
     console.error(err.message);
     process.exitCode = 1;

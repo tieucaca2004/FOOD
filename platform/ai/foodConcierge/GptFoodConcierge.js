@@ -33,8 +33,10 @@ export class GptFoodConcierge {
    * @param {{provider: object, tools: import("./foodTools.js").FoodTools, registry?: import("./toolRegistry.js").FoodAIToolRegistry, logger?: object, timeoutMs?: number, maxToolTurns?: number}} deps
    *   registry: the tools the model may call (default: the FOOD registry over `tools`) — nothing else is reachable
    */
-  constructor({ provider, tools, registry = null, logger = null, timeoutMs = 15000, maxToolTurns = 6, history = null }) {
+  constructor({ provider, tools, registry = null, logger = null, timeoutMs = 15000, maxToolTurns = 6, history = null, learning = null }) {
     this.provider = provider;
+    // controlled learning (learning.js): observes the turn and may propose a DRAFT candidate — never a fact
+    this.learning = learning;
     // (session, text) -> [{role: "customer"|"food", text}]: earlier turns of this conversation (FOOD Agent context)
     this.history = history;
     this.tools = tools;
@@ -81,6 +83,11 @@ export class GptFoodConcierge {
     meta.searchConfidence = understood?.confidence ?? null;
     const context = this._contextSummary(session, { newRequest });
     if (understood) context.search_intelligence = toGptContext(understood, results);
+    // OBSERVE / PROPOSE: a naming statement may become a learning candidate for a person to review; the model is told
+    // it was noted — it is NOT approved, so no tool / matcher / Fact Guard knows it as a fact
+    const learned = this._observe({ customer, session, text, previousQuery: context.previous_list?.query ?? null });
+    if (learned?.observed) meta.learning = learned.recorded ? "candidate_recorded" : learned.reason ?? "not_recorded";
+    if (learned?.recorded) context.learning = { noted_for_review: true, rule: "The customer's naming was noted for FOOD's review. It is NOT confirmed: never state it as a fact or an alias." };
     const earlier = this._historyBlock(session, text);
     meta.historyTurns = earlier.count;
     const input = [{ role: "user", content: `${earlier.block}CONTEXT ${JSON.stringify(context)}\nCUSTOMER: ${text}` }];
@@ -167,6 +174,14 @@ export class GptFoodConcierge {
 
   // The conversation state the model may use — the SAME stores the deterministic router uses (no second memory).
   // new_request: the customer asked for something new ("tìm …") — answer that, not the previous list (GPT-2.1)
+  _observe(req) {
+    try {
+      return this.learning ? this.learning.observe(req) : null;
+    } catch {
+      return null; // learning never breaks a turn
+    }
+  }
+
   // The conversation so far, for UNDERSTANDING only ("món đó", "quán thứ 2", a correction, feedback): the model is
   // told never to take a fact from it — prices, places, menus and orders still come only from this turn's tools,
   // and the Fact Guard still checks the answer against those tools alone.
