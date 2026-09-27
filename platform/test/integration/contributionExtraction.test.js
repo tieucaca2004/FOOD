@@ -228,3 +228,29 @@ test("TEXT: a customer's text contribution becomes USER_ASSERTION candidates aft
   assert.equal(cands[0].place_resolution.status, "resolved");
   assert.equal(cands[0].change, "NEW", "no published price for it yet: a NEW proposal, never applied");
 });
+
+test("OPENING HOURS (live finding): an hour range without an opening-hours cue is not opening hours for a customer", async () => {
+  // image: the notice "Cúp điện từ 8h đến 11h sáng mai" (live gpt-5.6-terra read it exactly like this)
+  const kit = contributionKit();
+  const img = flow(kit, ["irrelevant_text.jpg"]);
+  await kit.ingestion.drain();
+  assert.equal(kit.store.reading(img.id).findings.filter((f) => f.kind === "opening_hours").length, 0);
+  // text: the same sentence about a named place -> no hours candidate; with "mở cửa" -> one
+  const kit2 = contributionKit();
+  const no = flow(kit2, [], { text: "Quán Bún Cá Cô Ba cúp điện từ 8h đến 11h" });
+  const noCands = await confirm(kit2, no, "Bún Cá Cô Ba");
+  assert.ok(!noCands.some((c) => c.kind === "opening_hours"), JSON.stringify(noCands.map((c) => c.kind)));
+  const kit3 = contributionKit();
+  const yes = flow(kit3, [], { text: "Quán Bún Cá Cô Ba mở cửa từ 8h đến 11h" });
+  const yesCands = await confirm(kit3, yes, "Bún Cá Cô Ba");
+  assert.deepEqual(yesCands.filter((c) => c.kind === "opening_hours").map((c) => c.normalized_value), ["08:00-11:00"]);
+  // a cue on the line above ("Giờ mở cửa:" header of a menu) counts; "nghỉ thứ hai" carries its own cue
+  const kit4 = contributionKit();
+  const mixed = flow(kit4, [], { text: "Quán Bún Cá Cô Ba\nGiờ mở cửa:\n7h - 22h\nnghỉ thứ hai" });
+  const mixedCands = await confirm(kit4, mixed, "Bún Cá Cô Ba");
+  assert.deepEqual(mixedCands.filter((c) => c.kind === "opening_hours").map((c) => c.normalized_value).sort(), ["07:00-22:00", "closed:thứ hai"]);
+  // the Knowledge Group path is unchanged (frozen): its rule still reads the range, for a person to review
+  const g = kit.ingestion.receive({ channel: "telegram", chatId: "-100777", messageId: "g1", senderId: "501", text: "Quán Bún Cá Cô Ba cúp điện từ 8h đến 11h", raw: {} });
+  await kit.ingestion.drain();
+  assert.equal(kit.db.prepare(`SELECT COUNT(*) AS n FROM kb_ingest_candidates WHERE message_id = ? AND kind = 'opening_hours'`).get(g.id).n, 1);
+});

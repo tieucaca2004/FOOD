@@ -24,6 +24,15 @@ const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "ap
 const safe = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, "_");
 const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 const permanent = (message) => Object.assign(new Error(message), { permanent: true });
+// opening-hours cue: in the hour range's own segment or the line just above it (a menu header "Giờ mở cửa:")
+const HOURS_CUE = /(?:mở cửa|mo cua|giờ mở|gio mo|giờ hoạt động|gio hoat dong|hoạt động từ|hoat dong tu|phục vụ|phuc vu|mở từ|mo tu|mở bán|mo ban|giờ bán|gio ban|giờ làm việc|opening hours|open)/iu;
+function hasHoursCue(text, segment) {
+  if (HOURS_CUE.test(segment)) return true;
+  const lines = String(text ?? "").split(/\r?\n/).map((l) => l.trim());
+  const first = String(segment).split(/\r?\n/)[0].trim();
+  const at = lines.findIndex((l) => l.includes(first));
+  return at > 0 && HOURS_CUE.test(lines[at - 1]);
+}
 
 export class KnowledgeIngestion {
   /**
@@ -369,6 +378,9 @@ export class KnowledgeIngestion {
     // a customer's approximate amount ("khoảng 45k") is never read as a price
     const approximate = customer ? findings.filter((f) => f.kind === "price" && isApproximate(f.segment, f.rawValue)) : [];
     if (approximate.length) findings = findings.filter((f) => !approximate.includes(f));
+    // a customer's hour range is opening hours only next to an opening-hours cue ("Cúp điện từ 8h đến 11h" is not)
+    const notHours = customer ? findings.filter((f) => f.kind === "opening_hours" && !String(f.normalizedValue).startsWith("closed:") && !hasHoursCue(text, f.segment)) : [];
+    if (notHours.length) findings = findings.filter((f) => !notHours.includes(f));
     const kind = assertion ?? (extraction.kind === "fusion" ? "OBSERVED" : "USER_ASSERTION");
     const extractionId = this._extraction({
       messageId: message.id,
@@ -381,7 +393,7 @@ export class KnowledgeIngestion {
         resolution,
         findings,
         ...(extraction.inputs && { inputs: extraction.inputs }),
-        ...(customer && { sourceId, messageMediaId, assertion: kind, ocrConfidence, ...(approximate.length && { approximateIgnored: approximate.map((f) => f.segment) }) }),
+        ...(customer && { sourceId, messageMediaId, assertion: kind, ocrConfidence, ...(approximate.length && { approximateIgnored: approximate.map((f) => f.segment) }), ...(notHours.length && { hoursWithoutCueIgnored: notHours.map((f) => f.segment) }) }),
       },
       confidence: ocrConfidence,
     });
