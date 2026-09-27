@@ -1,4 +1,5 @@
 import { fold } from "../../conversation/understand.js";
+import { displayText } from "../../services/displayText.js";
 
 // formatting only (the knowledge layer is reachable solely through its adapter — architecture test)
 const vnd = (n) => `${Number(n).toLocaleString("vi-VN")}đ`;
@@ -27,7 +28,10 @@ const host = (url) => {
 //   ordering   "đặt được / thêm vào giỏ / giao…" only when a place in the ledger is orderable;
 //   ratings    "4.5/5", "… sao", "đánh giá …" only with recorded ratings;
 //   ranking    "ngon nhất / tốt nhất / nổi tiếng nhất / số 1" never (FOOD does not rank);
-//   names      a Proper Name must come from the ledger or the customer's own words.
+//   names      a Proper Name must come from the ledger or the customer's own words;
+//   address    a house number + street in the prose must be a recorded address of this turn (a street FOOD knows
+//              with another number is NOT that address);
+//   evaluation "nổi tiếng / được yêu thích / đặc biệt ngon / … hơn …" never — no source says it (FOOD has no such data).
 // Knowledge layers (additive; the rules above are unchanged and still decide every FACT):
 //   guidance   founder guidance is advice, never a fact (it adds nothing to prices / hours / orderability above);
 //              when this turn used it, a recommendation must be labelled "FOOD gợi ý";
@@ -127,6 +131,14 @@ const ORDER_CLAIM = /(đặt được|đặt qua food|đặt món|có thể đ�
 const RATING_CLAIM = /(\d(?:[.,]\d)?\s*(?:\/\s*5|sao)(?![\p{L}])|đánh giá (?:cao|tốt|\d)|review)/iu;
 const RANKING = /(ngon nhất|tốt nhất|rẻ nhất|nổi tiếng nhất|đông khách nhất|số\s*1|number one|best)/iu;
 const PROPER = /\p{Lu}[\p{Ll}\p{M}]+(?:\s+\p{Lu}[\p{Ll}\p{M}]*)+/gu;
+// "<cue> [số] <house number> [đường] <Street Name>": 170 Bạch Đằng, số 24 Tô Hiến Thành, 6A Tháp Bà, 12/3 Lê Lợi
+const ADDRESS_CLAIM = /(?<![\p{L}\d])(?:(ở|tại|địa chỉ(?:\s+là)?|nằm\s+(?:ở|tại|trên)|trên\s+đường|đường|số)\s+)?(?:số\s+)?(\d{1,5}[A-Za-z]?(?:\/\d{1,5}[A-Za-z]?)*)\s+(?:đường\s+|phố\s+|Đ\.\s*)?(\p{Lu}[\p{Ll}\p{M}]+(?:\s+\p{Lu}[\p{Ll}\p{M}]*)*)(?![\p{L}\d])/gu;
+// reputation / praise / comparison: no FOOD source records any of it (ratings are their own rule)
+const EVALUATIVE = /(nổi tiếng|được\s+(?:nhiều\s+(?:người|khách)\s+)?(?:yêu thích|ưa chuộng|săn đón|khen)|yêu thích nhất|đông khách|hút khách|đặc biệt ngon|ngon đặc biệt|ngon tuyệt|tuyệt vời|xuất sắc|chất lượng (?:cao|nhất)|(?:ngon|tốt|chất lượng|đáng thử|đáng ăn)\s+hơn|hơn hẳn|không đâu bằng|(?:rất|cực kỳ|cực|siêu|khá)\s+ngon)/giu;
+const NEGATED = /(không|chưa|ko)\s/iu;
+// folded, punctuation-free, without the connector words "số" / "đường" / "phố" / "Đ." ("Số 3A đường Tháp Bà" = "3A Tháp Bà")
+const CONNECTORS = new Set(["so", "duong", "pho", "d"]);
+const addressKey = (text) => ` ${foldText(text).replace(/(?<!\d)\/|\/(?!\d)/g, " ").replace(/[^\p{L}\p{N}/]+/gu, " ").split(" ").filter((w) => w && !CONNECTORS.has(w)).join(" ")} `;
 
 /**
  * @param {{reply: string, items: {merchant_id: string, product_ids: string[], note: string}[]}} answer
@@ -193,6 +205,23 @@ export function checkAnswer(answer, ledger, { userText = "", contextText = "" } 
   for (const m of prose.matchAll(PROPER)) {
     const name = foldText(m[0]);
     if (!known.includes(name)) violations.push(`UNSUPPORTED_NAME ${m[0]}`);
+  }
+  // ADDRESS: street match != address match — the number and the street must be one recorded address
+  const addresses = pool.map((m) => addressKey(m.address ?? "")).filter((a) => a.trim());
+  const placeNames = [...ledger.merchants.values()].map((m) => foldText(m.name));
+  for (const m of prose.matchAll(ADDRESS_CLAIM)) {
+    const [, cue, number, street] = m;
+    const streetKey = addressKey(street);
+    const knownStreet = addresses.some((a) => a.includes(streetKey));
+    if (!cue && !knownStreet) continue; // "3 Quán …": a number before a name, not an address
+    if (placeNames.some((n) => n.startsWith(foldText(street)))) continue; // "2 Bún Cá Mẫu": a place's name
+    if (!addresses.some((a) => a.includes(addressKey(`${number} ${street}`)))) violations.push(`UNSUPPORTED_ADDRESS ${number} ${street}`);
+  }
+  // EVALUATION: reputation / praise / comparison is never a fact FOOD holds (a negated sentence says nothing)
+  for (const m of prose.matchAll(EVALUATIVE)) {
+    const sentence = sentenceAt(prose, m.index);
+    const before = sentence.slice(0, Math.max(0, sentence.indexOf(m[0])));
+    if (!NEGATED.test(before)) violations.push(`UNSUPPORTED_EVALUATION ${m[0]}`);
   }
   // the customer's own number may come back only as their budget ("dưới / khoảng / tầm 50k"), never as a price
   for (const m of prose.matchAll(MONEY)) {
@@ -274,11 +303,11 @@ export function renderAnswer(answer, ledger) {
   for (const item of answer.items) {
     const m = ledger.merchants.get(item.merchant_id);
     if (!m) continue;
-    const lines = [`📍 ${m.name}`, `📌 ${m.address ?? "Chưa có địa chỉ trong nguồn hiện có"}`];
+    const lines = [`📍 ${displayText(m.name)}`, `📌 ${m.address ? displayText(m.address) : "Chưa có địa chỉ trong nguồn hiện có"}`];
     for (const pid of item.product_ids ?? []) {
       const p = m.products.get(pid);
       if (!p) continue;
-      lines.push(`🍜 ${p.name}`);
+      lines.push(`🍜 ${displayText(p.name)}`);
       lines.push(...priceLines(p));
     }
     if (item.note?.trim()) lines.push(`💬 ${item.note.trim()}`);

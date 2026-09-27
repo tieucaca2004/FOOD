@@ -7,6 +7,7 @@ import { TermRelationService } from "../knowledge/terms/termRelationService.js";
 import { TermMatcher } from "../knowledge/terms/termMatcher.js";
 import { termKey } from "../knowledge/terms/termNormalize.js";
 import { SearchIntelligenceV2, FoodResolver, MerchantIndex, normalizeInput } from "../search/v2/index.js";
+import { displayText } from "./displayText.js";
 
 const RECALL_LIMIT = 500; // every place of a list, so a follow-up is about the whole list, not only the ones shown
 
@@ -47,10 +48,20 @@ export function createFoodKnowledge({ dbPath, services, isRoutable }) {
   // search also matches products by name, which does not look at the place's own status (a rejected / duplicate /
   // closed place must never be listed, whatever its products say).
   const served = new Set(db.prepare(`SELECT id FROM kb_merchants WHERE status IN ('candidate', 'verified')`).all().map((r) => r.id));
+  // Trust boundary: names and addresses in knowledge.db are DATA from outside sources. What leaves this bridge (for
+  // the deterministic answers, the follow-ups, the Agent's tools) carries them as one-line display values
+  // (displayText): a stored name can never start a line of its own in a reply. The stored records are not changed.
+  const safeMerchant = (m) =>
+    m && {
+      ...m,
+      name: displayText(m.name),
+      location: m.location ? { ...m.location, address: m.location.address == null ? m.location.address : displayText(m.location.address) } : m.location,
+      products: (m.products ?? []).map((p) => ({ ...p, name: displayText(p.name) })),
+    };
   const searchServed = (input, opts = {}) => {
     const r = discovery.search(input, { ...opts, limit: RECALL_LIMIT });
     const merchants = r.merchants.filter((m) => served.has(m.id));
-    return { ...r, merchants: merchants.slice(0, opts.limit ?? 10), totalMerchants: r.totalMerchants - (r.merchants.length - merchants.length) };
+    return { ...r, foods: (r.foods ?? []).map((x) => ({ ...x, name: displayText(x.name) })), merchants: merchants.slice(0, opts.limit ?? 10).map(safeMerchant), totalMerchants: r.totalMerchants - (r.merchants.length - merchants.length) };
   };
   const hasTable = (name) => Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name));
   let matcher = null; // the runtime DB is a read-only snapshot: one matcher per process
@@ -135,7 +146,7 @@ export function createFoodKnowledge({ dbPath, services, isRoutable }) {
         .prepare(`SELECT id, original_name FROM kb_merchant_products WHERE merchant_id = ? AND status = 'published' ORDER BY id`)
         .all(id)
         .map((p) => ({ id: p.id, name: p.original_name, foods: [], prices: discovery._latestPrice(p.id), orderable: false }));
-      return { ...details, products, openStatus: discovery.openStatus(details) };
+      return safeMerchant({ ...details, products, openStatus: discovery.openStatus(details) });
     },
     /** The evidence behind a product's published prices: which source, what kind, when (read-only). */
     priceEvidence(productId) {
@@ -238,6 +249,7 @@ export function createFoodKnowledge({ dbPath, services, isRoutable }) {
       const foods = db
         .prepare(`SELECT id, key, canonical_name AS name FROM kb_food_entities WHERE status = 'published'`)
         .all()
+        .map((f) => ({ ...f, name: displayText(f.name) }))
         .map((f) => ({ ...f, words: normalizeInput(f.name).tokens.map((t) => ({ lower: t.lower, folded: t.folded })), merchants: stats.merchantsOf(f.key).size }));
       const kb = db
         .prepare(
@@ -245,7 +257,7 @@ export function createFoodKnowledge({ dbPath, services, isRoutable }) {
            FROM kb_merchants m WHERE m.status IN ('candidate', 'verified')`
         )
         .all()
-        .map((m) => ({ id: `kb:${m.id}`, name: m.name, address: m.address, kind: "kb" }));
+        .map((m) => ({ id: `kb:${m.id}`, name: displayText(m.name), address: m.address == null ? null : displayText(m.address), kind: "kb" }));
       const byKey = new Map(foods.map((f) => [f.key, f]));
       const vocabulary = discovery.parser().vocabulary;
       const si = new SearchIntelligenceV2({
