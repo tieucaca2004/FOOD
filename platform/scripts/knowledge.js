@@ -43,7 +43,7 @@ else if (command === "init") {
     }
   }
   const db = createKnowledgeConnection(DEFAULT_KNOWLEDGE_DB_PATH);
-  runKnowledgeMigrations(db);
+  runKnowledgeMigrations(db, { allowRuntime: process.argv.includes("--allow-runtime") });
   const applied = db.prepare(`SELECT name FROM kb_schema_migrations ORDER BY name`).all().map((r) => r.name);
   db.close();
   console.log(`${existed ? "Migrated" : "Created"} local knowledge DB at ${DEFAULT_KNOWLEDGE_DB_PATH} (migrations: ${applied.join(", ")})`);
@@ -67,7 +67,7 @@ async function ingestCommand(cmd, args) {
   const flag = (name, fallback = null) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
   const db = createKnowledgeConnection(platformConfig.knowledgeIngestDbPath);
   db.pragma("busy_timeout = 5000");
-  runKnowledgeMigrations(db);
+  runKnowledgeMigrations(db, { allowRuntime: process.argv.includes("--allow-runtime") });
   const ingestion = new KnowledgeIngestion({ db, knowledge: new KnowledgeStore({ db, rawRoot: platformConfig.knowledgeIngestRawRoot }), rawRoot: platformConfig.knowledgeIngestRawRoot });
   try {
     if (cmd === "ingest-status") {
@@ -109,7 +109,7 @@ async function contributionCommand(cmd, args) {
   const flag = (name, fallback = null) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : fallback);
   const db = createKnowledgeConnection(platformConfig.knowledgeIngestDbPath);
   db.pragma("busy_timeout = 5000");
-  runKnowledgeMigrations(db);
+  runKnowledgeMigrations(db, { allowRuntime: process.argv.includes("--allow-runtime") });
   const review = new ContributionReview({ db, knowledge: new KnowledgeStore({ db, rawRoot: platformConfig.knowledgeIngestRawRoot }) });
   const show = (c) =>
     `#${c.id} [${c.lifecycle} ${c.severity} ${c.change} ${c.confidence}] ${c.kind}/${c.assertion_kind}: ${c.place_text ?? "(no place)"} (${c.place_resolution.class ?? c.place_resolution.status}) / ${c.product_text ?? "-"} = ${c.raw_value} -> ${c.normalized_value}` +
@@ -149,7 +149,7 @@ async function founderCommand(cmd, args) {
   const dbPath = process.env.FOUNDER_KNOWLEDGE_DB_PATH || platformConfig.knowledgeIngestDbPath;
   const db = createKnowledgeConnection(dbPath);
   db.pragma("busy_timeout = 5000");
-  runKnowledgeMigrations(db);
+  runKnowledgeMigrations(db, { allowRuntime: process.argv.includes("--allow-runtime") });
   const fk = new FounderKnowledgeService({ db, rawRoot: platformConfig.knowledgeIngestRawRoot });
   const show = (i, detail = false) => {
     const lines = [
