@@ -113,7 +113,8 @@ if (platformConfig.userContributionsEnabled) {
 
 // GPT FOOD concierge: only when OPENAI_ENABLED=true with a key and a model; otherwise fully deterministic.
 const gpt = await createGptFoodConcierge({ services, repos, agentSearch, merchantRouter, logger, contributions: contributionService });
-if (gpt) logger.info("APP", "gpt food concierge enabled", { model: platformConfig.openaiModel, timeoutMs: platformConfig.openaiTimeoutMs, maxToolTurns: platformConfig.openaiMaxToolTurns });
+// the model the Agent's provider actually calls (FOOD_AGENT_MODEL > OPENAI_MODEL > default), not OPENAI_MODEL alone
+if (gpt) logger.info("APP", "gpt food concierge enabled", { model: gpt.provider?.model ?? platformConfig.foodAgentModel, timeoutMs: platformConfig.openaiTimeoutMs, maxToolTurns: platformConfig.openaiMaxToolTurns });
 else if (platformConfig.openaiEnabled) logger.warn("APP", "gpt food concierge NOT enabled: OPENAI_API_KEY or OPENAI_MODEL missing");
 const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai, gpt });
 
