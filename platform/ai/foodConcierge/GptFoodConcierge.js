@@ -153,6 +153,9 @@ export class GptFoodConcierge {
       const violations = checkAnswer(answer, ledger, { userText: text, contextText: [context.previous_list?.query ?? "", ...resolvedNames].join(" \n ") });
       if (!violations.length) {
         meta.items = answer.items.length;
+        // what the customer is SHOWN (ids the ledger knows, in the order shown): the router stores it as the reference
+        // for "quán thứ 2" / "món thứ 2" — never the model's prose, never HISTORY
+        meta.shown = answer.items.filter((i) => ledger.merchants.has(i.merchant_id)).map((i) => ({ merchant_id: i.merchant_id, product_ids: (i.product_ids ?? []).filter((p) => ledger.merchants.get(i.merchant_id).products.has(p)) }));
         meta.guardRetries = guardRetries;
         return finish(renderAnswer(answer, ledger));
       }

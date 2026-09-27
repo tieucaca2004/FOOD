@@ -102,6 +102,34 @@ const MERCHANT_IDLE_MS = 60 * 60 * 1000;
 // the legacy module's product-question intents (its own labels, src/router/businessRouter.js _reply())
 const LEGACY_PRODUCT_INTENTS = new Set(["product_question", "product_price", "product_availability"]);
 // the platform's own ordering reading (conversation/understand.js) of turns that continue an order without naming a dish
+// FORM 10 — the structured reference of a conversation (knowledge_context_json): what FOOD SHOWED, by id.
+// shownIds: the places as displayed (the Agent's items, when it rendered the answer) — else the first shownCount ids.
+const shownPlaces = (ctx) => (Array.isArray(ctx?.shownIds) && ctx.shownIds.length ? ctx.shownIds : (ctx?.matchedIds ?? []).slice(0, ctx?.shownCount ?? 0));
+// a list the customer can count in ("quán thứ 2"): two places or more shown
+const enumerated = (ctx) => shownPlaces(ctx).length >= 2;
+// a list kept as it was shown (no nested list / menu / dish focus of its own)
+const asList = (ctx) => {
+  if (!ctx) return null;
+  const { list, menu, productFocus, ...rest } = ctx;
+  return rest;
+};
+// the dishes a merchant answer SHOWED, in order (the same rules as search/v2/composer.js composeMerchantOperation)
+const priceOfDish = (p) => p.prices?.find((x) => x.price !== null) ?? null;
+function displayedDishes(operation, group) {
+  if (operation === "place") {
+    const main = [...group].sort((a, b) => (b.products?.length ?? 0) - (a.products?.length ?? 0))[0];
+    return (main?.products ?? []).slice(0, 5).map((p) => ({ merchantId: main.id, productId: p.id }));
+  }
+  if (operation !== "menu" && operation !== "price") return [];
+  const seen = new Map();
+  for (const m of group) for (const p of m.products ?? []) if (!seen.has(p.name.toLowerCase()) || (!priceOfDish(seen.get(p.name.toLowerCase()).p) && priceOfDish(p))) seen.set(p.name.toLowerCase(), { p, merchantId: m.id });
+  const dishes = [...seen.values()].filter((x) => operation === "menu" || priceOfDish(x.p));
+  return dishes.slice(0, 10).map((x) => ({ merchantId: x.merchantId, productId: x.p.id }));
+}
+
+// "menu quán thứ 2", "quán này có món gì": the place's MENU, not its list card
+const MENU_QUESTION = /\b(?:menu|thuc don|mon gi|co gi|ban gi|nhung mon nao|mon nao)\b/;
+
 const ORDER_CONTINUATION = new Set(["quantity_only", "adjust_quantity", "change_quantity", "choose_option", "confirm_order", "cancel_order", "provide_delivery_address", "ask_total", "review_order", "show_cart", "reorder"]);
 
 export class PlatformRouter {
@@ -143,6 +171,7 @@ export class PlatformRouter {
     // the model only answers FOOD questions: nothing found and nothing food-like in the words -> scope reply
     if (!deterministic.knowledgeResultCount && !this._foodScope(deterministic.session, text)) return { ...deterministic, replyText: SCOPE_REPLY, scope: { scope: "NO_FOOD_SIGNAL" } };
     const answer = await this.gpt.respond({ customer, session: deterministic.session, text, reason: "discovery", newRequest: discovery, searchResult, results: deterministic.results, deterministicReply: deterministic.replyText });
+    if (answer) this._recordShown(deterministic.session, answer.meta, { replacesDisplay: true });
     return answer ? { ...deterministic, replyText: answer.text, concierge: answer.meta } : deterministic;
   }
 
@@ -266,6 +295,7 @@ ${elsewhere}` : result.replyText,
 
     // "chọn 2" / "2" right after a result list.
     const pickedByNumber = this._pickFromLastResults(session, text);
+    if (pickedByNumber?.ambiguous) return { replyText: pickedByNumber.ambiguous, session, knowledgeFollowUp: "clarify" };
     if (pickedByNumber) return this._openMerchant(customer, session, pickedByNumber, { entrySource: "search_pick" });
 
     // A question about OTHER places or the AREA is never about the merchant just found (it would reopen it)
@@ -288,6 +318,13 @@ ${elsewhere}` : result.replyText,
     // filters, a shortened / mistyped dish, an area question, the dish of the conversation — planned first;
     // anything it does not own (orders, catalog places, list follow-ups) continues below unchanged.
     // ONE reading of the message per turn: the plan below and every concierge call of this turn use it
+    // A pure reference ("quán thứ 2", "quán đó", "món thứ 2", "giá món đó", "còn không?") is resolved against the stored
+    // context — or asked back — before any plan or model call: the model never decides what a reference means (FORM 10)
+    if (!aboutOthers && this._isPureReference(text, concierge)) {
+      const resolved = this._knowledgeFollowUp(session, text, concierge);
+      if (resolved) return resolved;
+    }
+
     const reading = this._searchPlan(session, text, { currentMerchantId: excludeMerchantId });
     const planned = await this._executeSearchPlan(customer, session, text, { excludeMerchantId, newRequest: Boolean(concierge.discovery), reading });
     if (planned) return planned;
@@ -320,7 +357,10 @@ ${elsewhere}` : result.replyText,
     // Unknown: the GPT concierge (tools + Fact Guard) when enabled — for FOOD questions only ...
     if (this.gpt?.enabled()) {
       if (!this._foodScope(session, text)) return { replyText: SCOPE_REPLY, session, scope: { scope: "NO_FOOD_SIGNAL" } };
+      const before = JSON.stringify(this.services.sessions.getKnowledgeContext(session.id));
       const answer = await this.gpt.respond({ customer, session, text, reason: "unknown", searchResult: reading });
+      // this turn showed no list of its own — unless the Agent's search tool stored a new one during the turn
+      if (answer) this._recordShown(session, answer.meta, { replacesDisplay: JSON.stringify(this.services.sessions.getKnowledgeContext(session.id)) !== before });
       if (answer) return { replyText: answer.text, session, concierge: answer.meta };
     }
 
@@ -446,6 +486,7 @@ ${elsewhere}` : result.replyText,
       if (!this.gpt?.enabled()) return fallback;
       trace.gptCalled = true;
       const answer = await this.gpt.respond({ customer, session: sess, text, reason, newRequest, searchResult: si, results, deterministicReply: fallback.replyText });
+      if (answer) this._recordShown(sess, answer.meta, { replacesDisplay: true });
       return answer ? { ...fallback, replyText: answer.text, concierge: answer.meta } : fallback;
     };
     if (p.type === "DEFER") return null;
@@ -468,8 +509,13 @@ ${elsewhere}` : result.replyText,
       const groups = p.groups.map((g) => g.map((c) => fk.merchant(Number(String(c.id).replace(/^kb:/, "")))).filter(Boolean)).filter((g) => g.length);
       if (!groups.length) return null;
       const ids = groups.flat().map((m) => m.id);
+      // the list the customer was shown before stays the list ("quán thứ 2" after "quán X có menu gì?"): kept under it
+      const prior = this.services.sessions.getKnowledgeContext(session.id);
+      const kept = isFresh(prior) && enumerated(prior) ? asList(prior) : prior?.list && isFresh(prior.list) ? prior.list : null;
       const updated = this.services.sessions.update(session.id, { lastSearchQuery: p.said, lastSearchResults: [] });
-      const base = { type: "food_knowledge_results", rawQuery: text, query: p.said, named: true, foodKeys: [], regionId: null, matchedIds: ids, searchIds: ids, shownCount: ids.length, total: ids.length, focusId: groups.length === 1 ? ids[0] : null };
+      const shownIds = groups.map((g) => ([...g].sort((a, b) => (b.products?.length ?? 0) - (a.products?.length ?? 0))[0] ?? g[0]).id);
+      const dishes = groups.length === 1 ? displayedDishes(p.operation, groups[0]) : [];
+      const base = { type: "food_knowledge_results", rawQuery: text, query: p.said, named: true, foodKeys: [], regionId: null, matchedIds: ids, searchIds: ids, shownIds, shownCount: shownIds.length, total: ids.length, focusId: groups.length === 1 ? shownIds[0] : null, list: kept, menu: dishes.length ? { items: dishes, touchedAt: new Date().toISOString() } : null };
       this.services.sessions.setKnowledgeContext(updated.id, withSearchState(base, { currentIntent: `MERCHANT_${p.operation.toUpperCase()}`, currentMerchant: { ids, name: p.said }, lastSearchPlan: { type: p.type, operation: p.operation }, lastUserQuery: text }));
       const answer = { ...reply(composer.composeMerchantOperation({ operation: p.operation, groups, confidence: si.confidence, said: p.said, renderPlace: (m) => fk.renderMerchant(m) })), session: updated, knowledgeResultCount: groups.length };
       // the place is resolved: its records answer (deterministic), or the concierge phrases them from the same
@@ -519,7 +565,26 @@ ${elsewhere}` : result.replyText,
     const fresh = isFresh(context);
     if (!fresh) {
       const about = { price: "giá", address: "địa chỉ", hours: "giờ mở cửa" }[question.kind] ?? "thông tin";
-      return { replyText: `Dạ anh/chị muốn hỏi ${about} của món hoặc quán nào ạ? (VD: "tìm <tên món>")`, session };
+      return { replyText: `Dạ anh/chị muốn hỏi ${about} của món hoặc quán nào ạ? (VD: "tìm <tên món>")`, session, knowledgeFollowUp: "clarify" };
+    }
+    // a DISH of the menu shown ("món thứ 2", "món đó", "giá món đó") / "còn không?"
+    if (question.kind === "product" || question.productOrdinal != null || question.productRef) return this._dishFollowUp(session, context, question);
+    if (question.kind === "availability") return this._availabilityFollowUp(session, context, question);
+    // a POSITION ("quán thứ 2") counts in the list the customer was SHOWN: this context's own list, or — when this
+    // context is one place answered by name — the list kept under it; never a place that was not shown
+    if (question.ordinal !== null && question.kind !== "more") {
+      const list = enumerated(context) ? context : context.list && isFresh(context.list) ? context.list : context;
+      const shown = shownPlaces(list);
+      const index = question.ordinal < 0 ? shown.length + question.ordinal : question.ordinal;
+      if (!shown.length || index < 0 || index >= shown.length) return { replyText: `Dạ danh sách vừa rồi có ${shown.length} quán thôi ạ.`, session, knowledgeFollowUp: "clarify" };
+      // the Agent rendered the list (its own order): those places, by id
+      if (MENU_QUESTION.test(normalizeForMatch(text))) return this._menuOf(session, list === context ? context : asList(list), shown[index]);
+      const byDisplay = Array.isArray(list.shownIds) && list.shownIds.length;
+      const view = byDisplay ? { ...list, matchedIds: shown, searchIds: shown, shownCount: shown.length } : list;
+      const answer = this.agentSearch.foodKnowledgeFollowUp(question.kind, { context: view, ordinal: index, targetId: null });
+      // that list is the subject again; the place answered about is its focus
+      this.services.sessions.setKnowledgeContext(session.id, { ...(list === context ? context : asList(list)), focusId: answer.focusId ?? null, touchedAt: new Date().toISOString() });
+      return { replyText: answer.text, session, knowledgeFollowUp: question.kind };
     }
     // a list that is one place asked for by name: "còn quán nào khác / nữa" asks for OTHER places (global)
     if (question.kind === "more" && context.named) {
@@ -530,15 +595,97 @@ ${elsewhere}` : result.replyText,
     // a one-place list is unambiguous; otherwise ask — never guess, never search "quán đó"
     let targetId = null;
     if (question.ref === "focus") {
-      const ids = context.matchedIds ?? [];
+      const ids = [...new Set([...(context.matchedIds ?? []), ...shownPlaces(context)])];
       if (context.focusId != null && ids.includes(context.focusId)) targetId = context.focusId;
-      else if (ids.length === 1) targetId = ids[0];
+      else if (shownPlaces(context).length === 1) targetId = shownPlaces(context)[0];
       else return { replyText: "Dạ anh/chị hỏi quán nào trong danh sách ạ? (VD: “quán đầu tiên”, “quán thứ 2”)", session, knowledgeFollowUp: "clarify" };
     }
+    if (targetId !== null && question.kind === "place" && MENU_QUESTION.test(normalizeForMatch(text))) return this._menuOf(session, context, targetId);
     const answer = this.agentSearch.foodKnowledgeFollowUp(question.kind, { context, ordinal: question.ordinal, targetId });
     // the list stays the subject of the conversation; the original query is never overwritten
     this.services.sessions.setKnowledgeContext(session.id, { ...context, shownCount: answer.shownCount, focusId: answer.focusId ?? null, touchedAt: new Date().toISOString() });
     return { replyText: answer.text, session, knowledgeFollowUp: question.kind };
+  }
+
+  /** A message that is ONLY a reference to something shown (no dish / place / region of its own). */
+  _isPureReference(text, concierge) {
+    if (concierge.discovery || !this.agentSearch.foodKnowledgeEnabled()) return false;
+    const q = classifyKnowledgeFollowUp(text);
+    if (!q || q.residue) return false;
+    return q.ordinal !== null || q.ref !== null || q.productOrdinal != null || Boolean(q.productRef) || q.kind === "availability";
+  }
+
+  /**
+   * Record what the Agent SHOWED (FORM 10): the reference for the next "quán thứ 2" / "món thứ 2" is that, by id.
+   * replacesDisplay: the Agent's answer replaced this turn's deterministic reply (the customer saw only the Agent's
+   * items, never the list the router stored this turn); otherwise it answered about something shown earlier.
+   */
+  _recordShown(session, meta, { replacesDisplay = false } = {}) {
+    const shown = Array.isArray(meta?.shown) ? meta.shown.filter((x) => /^kb:\d+$/.test(String(x.merchant_id))) : [];
+    if (!session || !shown.length) return;
+    const ctx = this.services.sessions.getKnowledgeContext(session.id);
+    if (!isFresh(ctx)) return;
+    const ids = shown.map((x) => Number(String(x.merchant_id).slice(3)));
+    const dishes = ids.length === 1 ? shown[0].product_ids.filter((p) => /^kbp:\d+$/.test(p)).map((p) => ({ merchantId: ids[0], productId: Number(p.slice(4)) })) : [];
+    const menu = dishes.length ? { items: dishes, touchedAt: new Date().toISOString() } : ids.length === 1 && ctx.named ? ctx.menu ?? null : null;
+    const inList = ids.every((id) => (ctx.matchedIds ?? []).includes(id));
+    let next;
+    if (!replacesDisplay && inList && ids.length === 1 && enumerated(ctx)) next = { ...ctx, focusId: ids[0], menu }; // one place OF a list shown before: the focus
+    else if (inList) next = { ...ctx, shownIds: ids, shownCount: ids.length, focusId: ids.length === 1 ? ids[0] : null, menu };
+    else {
+      // places outside the stored list (the Agent's own tool call): a new subject; the list the customer SAW before is
+      // kept under it (this turn's stored list was never seen when the Agent replaced the display)
+      const kept = !replacesDisplay && enumerated(ctx) ? asList(ctx) : ctx.list && isFresh(ctx.list) ? ctx.list : null;
+      next = { ...asList(ctx), named: true, matchedIds: ids, searchIds: ids, shownIds: ids, shownCount: ids.length, total: ids.length, focusId: ids.length === 1 ? ids[0] : null, list: kept, menu, touchedAt: new Date().toISOString() };
+    }
+    this.services.sessions.setKnowledgeContext(session.id, next);
+  }
+
+  // "món thứ 2" / "món đầu tiên" / "món đó" / "giá món đó": one dish of the menu FOOD showed (by id), rendered from the
+  // data (price with its source and date) — never from HISTORY; nothing is added to a cart
+  _dishFollowUp(session, context, question) {
+    const fk = this.agentSearch.foodKnowledge;
+    const menu = context.menu?.items?.length && isFresh(context.menu) ? context.menu.items : null;
+    let pick = null;
+    if (question.productOrdinal != null) {
+      if (!menu) return { replyText: "Dạ anh/chị hỏi món của quán nào ạ? (VD: “menu quán …”)", session, knowledgeFollowUp: "clarify" };
+      const index = question.productOrdinal < 0 ? menu.length + question.productOrdinal : question.productOrdinal;
+      if (index < 0 || index >= menu.length) return { replyText: `Dạ thực đơn vừa rồi có ${menu.length} món thôi ạ.`, session, knowledgeFollowUp: "clarify" };
+      pick = menu[index];
+    } else if (context.productFocus) pick = context.productFocus;
+    else if (menu?.length === 1) pick = menu[0];
+    else return { replyText: "Dạ anh/chị hỏi món nào ạ? (VD: “món thứ 2”)", session, knowledgeFollowUp: "clarify" };
+    const m = fk.merchant(pick.merchantId);
+    const dish = m?.products.find((p) => p.id === pick.productId) ?? null;
+    if (!dish) return { replyText: "Dạ món đó không còn trong dữ liệu hiện có, anh/chị xem lại thực đơn giúp em nha.", session, knowledgeFollowUp: "clarify" };
+    this.services.sessions.setKnowledgeContext(session.id, { ...context, focusId: m.id, productFocus: { merchantId: m.id, productId: dish.id }, touchedAt: new Date().toISOString() });
+    return { replyText: fk.renderMerchant({ ...m, products: [dish] }), session, knowledgeFollowUp: question.kind === "price" ? "price" : "product" };
+  }
+
+  /** One place's menu from the data (the same card as a merchant detail); the dishes SHOWN become the menu context. */
+  _menuOf(session, context, merchantId) {
+    const fk = this.agentSearch.foodKnowledge;
+    const m = fk.merchant(merchantId);
+    if (!m) return { replyText: "Dạ quán đó không còn trong dữ liệu hiện có, anh/chị tìm lại giúp em nha.", session, knowledgeFollowUp: "clarify" };
+    const dishes = displayedDishes("place", [m]);
+    this.services.sessions.setKnowledgeContext(session.id, { ...context, focusId: m.id, productFocus: null, menu: dishes.length ? { items: dishes, touchedAt: new Date().toISOString() } : null, touchedAt: new Date().toISOString() });
+    return { replyText: fk.renderMerchant(m), session, knowledgeFollowUp: "menu" };
+  }
+
+  // "còn không?": about the dish or the place just answered about — FOOD has no stock / open-now data for a reference
+  // place, and says so; with no clear referent it asks
+  _availabilityFollowUp(session, context, question) {
+    const fk = this.agentSearch.foodKnowledge;
+    if (context.productFocus && (question.productRef || !question.ref)) {
+      const m = fk.merchant(context.productFocus.merchantId);
+      const dish = m?.products.find((p) => p.id === context.productFocus.productId);
+      if (dish) return { replyText: `Dạ em chưa có thông tin món “${dish.name}” ở ${m.name} hiện còn phục vụ hay không — các nguồn chỉ ghi món này (thông tin tham khảo, chưa đặt qua FOOD được). Anh/chị liên hệ quán để chắc chắn giúp em nha.`, session, knowledgeFollowUp: "availability" };
+    }
+    const shown = shownPlaces(context);
+    const target = context.focusId != null ? context.focusId : shown.length === 1 ? shown[0] : null;
+    const m = target != null ? fk.merchant(target) : null;
+    if (!m) return { replyText: "Dạ anh/chị hỏi món nào hoặc quán nào ạ? (VD: “quán thứ 2 còn mở không”)", session, knowledgeFollowUp: "clarify" };
+    return { replyText: `Dạ em chưa có thông tin ${m.name} hiện còn mở hay còn món không — dữ liệu của quán là thông tin tham khảo, chưa đặt qua FOOD được. Anh/chị liên hệ quán để chắc chắn giúp em nha.`, session, knowledgeFollowUp: "availability" };
   }
 
   // A knowledge place the catalog results already show must not reappear below them as "chưa đặt qua FOOD":
@@ -573,9 +720,24 @@ ${elsewhere}` : result.replyText,
   _pickFromLastResults(session, text) {
     const m = String(text || "").trim().toLowerCase().match(/^(?:(?:chọn|chon|xem|mở|mo|quán|quan|số|so)\s+)*(\d{1,2})$/);
     const results = session.lastSearchResults || [];
-    if (!m || results.length < 2) return null;
-    const picked = results[Number(m[1]) - 1];
-    return picked ? this.services.merchantData.getById(picked.merchant_id) : null;
+    if (results.length < 2) return null;
+    if (m) {
+      const picked = results[Number(m[1]) - 1];
+      return picked ? this.services.merchantData.getById(picked.merchant_id) : null;
+    }
+    // "cho tôi quán thứ 2 đi": a position in the catalog list — unless the reference list shown with it has that
+    // position too (two lists on screen): then ask which one, never guess (FORM 10)
+    const q = classifyKnowledgeFollowUp(text);
+    if (!q || q.kind !== "place" || q.ordinal === null || q.ordinal < 0 || q.residue) return null;
+    const picked = results[q.ordinal];
+    if (!picked) return null;
+    const kb = this.services.sessions.getKnowledgeContext(session.id);
+    const other = isFresh(kb) && !kb.named ? shownPlaces(kb)[q.ordinal] : null;
+    if (other != null) {
+      const ref = this.agentSearch.foodKnowledge?.merchant?.(other);
+      return { ambiguous: `Dạ anh/chị muốn xem quán thứ ${q.ordinal + 1} trong danh sách đặt được qua FOOD (${picked.name}) hay trong danh sách tham khảo${ref ? ` (${ref.name})` : ""} ạ?` };
+    }
+    return this.services.merchantData.getById(picked.merchant_id);
   }
 
   // A bare merchant name answering a result list ("A Tiểu"). Only when the
