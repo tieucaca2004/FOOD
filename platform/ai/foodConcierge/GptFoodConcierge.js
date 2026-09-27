@@ -125,7 +125,15 @@ export class GptFoodConcierge {
           } catch {
             args = undefined; // malformed JSON: rejected by the registry like any invalid arguments
           }
-          const result = await this.registry.execute(call.name, args, ctx);
+          // a tool (a merchant adapter behind it) is held to the same turn deadline as the model: fail closed
+          const toolRemaining = this.timeoutMs - (Date.now() - started);
+          if (toolRemaining <= 0) return finish(null, "timeout");
+          let result;
+          try {
+            result = await withDeadline(this.registry.execute(call.name, args, ctx), toolRemaining);
+          } catch {
+            return finish(null, "tool_timeout");
+          }
           ledger.add(result.facts);
           const output = result.data;
           meta.tools.push({ toolName: String(call.name).slice(0, 64), toolLatencyMs: Date.now() - t0, toolResultCount: result.facts.length, errorType: result.ok ? output?.error ?? null : result.error.code });
