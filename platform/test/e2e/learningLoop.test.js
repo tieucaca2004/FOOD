@@ -309,8 +309,8 @@ test("UNAPPROVED: a second term stays a DRAFT -> not in the matcher / Search V2 
   } finally {
     day1.stop();
   }
-  assert.ok(promoteCli(dep).ok); // the DRAFT row travels in the snapshot too — only APPROVED is ever read
-  assert.equal(count(dep.runtimeFile, "kb_term_relations"), 1);
+  assert.ok(promoteCli(dep).ok); // FORM 06: a DRAFT never reaches the runtime snapshot (it stays in the working DB)
+  assert.deepEqual([count(dep.runtimeFile, "kb_term_relations"), count(dep.workingFile, "kb_term_relations")], [0, 1]);
   const day2 = await start(dep, { script: claim });
   try {
     const s = day2.search(TERM2);
@@ -324,7 +324,7 @@ test("UNAPPROVED: a second term stays a DRAFT -> not in the matcher / Search V2 
     assert.ok(t.violations.includes("UNSUPPORTED_ALIAS"), JSON.stringify(t.violations));
     assert.equal(t.mode, "deterministic_fallback");
     assert.doesNotMatch(reply, /tên khác của bánh căn/i);
-    keep("6_unapproved", { literalBanhX: literalX, candidate: TERM2 + " -> Bánh căn (DRAFT, promoted as a DRAFT row)", search: s, controlSearchWithoutCandidate: controlSearch, agentClaimed: "Dạ, bánh khuôn đất là tên khác của bánh căn ạ.", factGuard: t.violations, mode: t.mode, customerSaw: reply });
+    keep("6_unapproved", { literalBanhX: literalX, candidate: TERM2 + " -> Bánh căn (DRAFT, kept in the working DB, not promoted)", search: s, controlSearchWithoutCandidate: controlSearch, agentClaimed: "Dạ, bánh khuôn đất là tên khác của bánh căn ạ.", factGuard: t.violations, mode: t.mode, customerSaw: reply });
   } finally {
     day2.stop();
   }

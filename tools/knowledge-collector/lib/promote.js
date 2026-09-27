@@ -64,6 +64,8 @@ export async function promoteKnowledge({ from, to, backupDir = path.join(path.di
     check(copy, "copy");
     const left = copy.prepare(`SELECT name FROM sqlite_master WHERE name LIKE 'kb_ingest%' OR name = 'kb_contribution_visible'`).all();
     if (left.length) throw new Error(`copy still holds raw ingestion data: ${left.map((r) => r.name).join(", ")}`);
+    const termLeft = termProvenanceLeft(copy);
+    if (termLeft) throw new Error(`copy still holds term review data: ${termLeft}`);
     const copied = knowledgeCounts(copy);
     if (JSON.stringify(copied) !== JSON.stringify(counts)) throw new Error(`copy differs from source: ${JSON.stringify({ counts, copied })}`);
   } finally {
@@ -80,17 +82,64 @@ export async function promoteKnowledge({ from, to, backupDir = path.join(path.di
   } catch (err) {
     throw new Error(`could not replace ${to} (${err.code ?? err.message}) — is the platform holding it open? Promote before (re)starting it.`);
   }
-  const manifest = { promotedAt: new Date().toISOString(), source: path.resolve(from), runtime: path.resolve(to), sha256: sha256(to), bytes: fs.statSync(to).size, counts, previousBackup: previous, rawIngestTables: 0, scrubbedIngestTables: rawIngestTables.dropped, scrubbedContributionSources: rawIngestTables.sources };
+  const manifest = { promotedAt: new Date().toISOString(), source: path.resolve(from), runtime: path.resolve(to), sha256: sha256(to), bytes: fs.statSync(to).size, counts, previousBackup: previous, rawIngestTables: 0, scrubbedIngestTables: rawIngestTables.dropped, scrubbedContributionSources: rawIngestTables.sources, scrubbedTermReview: rawIngestTables.terms };
   fs.writeFileSync(`${to}.manifest.json`, JSON.stringify(manifest, null, 2));
   return manifest;
+}
+
+// What the runtime term matcher reads (TermRelationService.buildMatcher -> TermMatcher): APPROVED kb_term_relations
+// rows — id, food_entity_id, canonical_name, term, term_key, relation_type, region_id, confidence, status. It never
+// reads kb_term_evidence or kb_term_events, nor who proposed a relation.
+const TERM_TABLES = ["kb_term_relations", "kb_term_evidence", "kb_term_events"];
+const RUNTIME_CREATED_BY = "(working-db)"; // provenance lives in the working DB only
+
+/** Term review data (evidence, events, unapproved rows, proposer identities) left in a runtime copy, or null. */
+function termProvenanceLeft(db) {
+  const has = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${TERM_TABLES.map(() => "?").join(", ")})`).all(...TERM_TABLES).map((r) => r.name));
+  if (!has.has("kb_term_relations")) return null;
+  const n = (sql) => db.prepare(sql).get().n;
+  const left = {
+    evidence: has.has("kb_term_evidence") ? n(`SELECT COUNT(*) AS n FROM kb_term_evidence`) : 0,
+    events: has.has("kb_term_events") ? n(`SELECT COUNT(*) AS n FROM kb_term_events`) : 0,
+    unapproved: n(`SELECT COUNT(*) AS n FROM kb_term_relations WHERE status != 'APPROVED'`),
+    proposers: n(`SELECT COUNT(*) AS n FROM kb_term_relations WHERE created_by != '${RUNTIME_CREATED_BY}'`),
+  };
+  const bad = Object.entries(left).filter(([, v]) => v > 0);
+  return bad.length ? bad.map(([k, v]) => `${k}=${v}`).join(", ") : null;
+}
+
+/**
+ * Term relations in the COPY keep only what the matcher reads: the APPROVED rows, their proposer replaced by a
+ * neutral label (an Agent-learning proposer names the channel, the session and a customer hash). Evidence (the
+ * customer's exact words), the review events (actors) and DRAFT / REVIEW / RETIRED rows stay in the working DB,
+ * where "where was this term learned?" is answered. The append-only / immutability triggers are lifted on the copy
+ * for the scrub and restored as they were (same schema as the source).
+ * @returns {{evidence: number, events: number, unapproved: number, relations: number} | null}
+ */
+function scrubTermReview(db) {
+  const tables = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all().map((r) => r.name));
+  if (!tables.has("kb_term_relations")) return null;
+  const triggers = db.prepare(`SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name IN (${TERM_TABLES.map(() => "?").join(", ")})`).all(...TERM_TABLES);
+  for (const t of triggers) db.exec(`DROP TRIGGER "${t.name}"`);
+  const out = {
+    evidence: tables.has("kb_term_evidence") ? db.prepare(`DELETE FROM kb_term_evidence`).run().changes : 0,
+    events: tables.has("kb_term_events") ? db.prepare(`DELETE FROM kb_term_events`).run().changes : 0,
+    unapproved: db.prepare(`DELETE FROM kb_term_relations WHERE status != 'APPROVED'`).run().changes,
+  };
+  // supersedes_id would point at a removed (RETIRED) version
+  db.prepare(`UPDATE kb_term_relations SET created_by = ?, supersedes_id = NULL`).run(RUNTIME_CREATED_BY);
+  out.relations = db.prepare(`SELECT COUNT(*) AS n FROM kb_term_relations`).get().n;
+  for (const t of triggers) db.exec(t.sql);
+  return out;
 }
 
 /**
  * The runtime snapshot carries PUBLISHED knowledge only. Raw ingestion evidence (Knowledge Group messages, customer
  * contributions: senders, hashes, updates, jobs, readings, candidates) stays in the working DB: every kb_ingest_*
  * table and the contribution view are dropped from the COPY, customer source URLs (which hold a chat hash) are
- * replaced by a neutral label, and the copy is VACUUMed so no deleted page keeps the bytes. The source DB is never touched.
- * @returns {{dropped: string[], sources: number}}
+ * replaced by a neutral label, term review data is reduced to the APPROVED relations (scrubTermReview), and the copy
+ * is VACUUMed so no deleted page keeps the bytes. The source DB is never touched.
+ * @returns {{dropped: string[], sources: number, terms: object | null}}
  */
 export function scrubRuntimeCopy(file) {
   const db = new Database(file);
@@ -98,7 +147,9 @@ export function scrubRuntimeCopy(file) {
     db.pragma("foreign_keys = OFF");
     const names = db.prepare(`SELECT type, name FROM sqlite_master WHERE (type = 'table' AND name LIKE 'kb_ingest%') OR (type = 'view' AND name = 'kb_contribution_visible')`).all();
     let sources = 0;
+    let terms = null;
     db.transaction(() => {
+      terms = scrubTermReview(db);
       for (const v of names.filter((n) => n.type === "view")) db.exec(`DROP VIEW "${v.name}"`);
       for (const t of names.filter((n) => n.type === "table")) db.exec(`DROP TABLE "${t.name}"`);
       const hasSources = db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'kb_sources'`).get();
@@ -110,7 +161,7 @@ export function scrubRuntimeCopy(file) {
     })();
     db.exec("VACUUM");
     db.pragma("journal_mode = DELETE"); // self-contained file: nothing of the scrub left in a -wal beside it
-    return { dropped: names.map((n) => n.name).sort(), sources };
+    return { dropped: names.map((n) => n.name).sort(), sources, terms };
   } finally {
     db.close();
   }
