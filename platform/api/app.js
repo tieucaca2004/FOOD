@@ -14,7 +14,9 @@ import { sanitizeWebhookErrors } from "./middleware/sanitizeWebhookErrors.js";
 import { createTelegramWebhookHandler } from "../channel/telegramWebhookController.js";
 import { telegramWebhookSecurity } from "./middleware/telegramWebhookSecurity.js";
 
-export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router, knowledgeIngest = null, contributions = false }) {
+// telegramRouter: what the Telegram channel sees (the Model Router, FORM 11); defaults to the shared router. Zalo always
+// gets `router`.
+export function createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router, telegramRouter = router, knowledgeIngest = null, contributions = false }) {
   const app = express();
   app.disable("x-powered-by");
 
@@ -40,7 +42,7 @@ export function createPlatformApp({ db, repos, services, discovery, merchantRout
     platformConfig.telegramWebhookPath,
     telegramWebhookSecurity,
     sanitizeWebhookErrors,
-    createTelegramWebhookHandler({ repos, services, router, knowledgeIngest, contributions })
+    createTelegramWebhookHandler({ repos, services, router: telegramRouter, knowledgeIngest, contributions })
   );
 
   app.use(platformNotFound);

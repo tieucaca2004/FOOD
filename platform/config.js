@@ -53,6 +53,16 @@ export const platformConfig = {
   // structured search intent (dish / place / location / price / follow-up) given to the GPT concierge as context
   searchIntelligenceEnabled: process.env.SEARCH_INTELLIGENCE_ENABLED === "true",
 
+  // Telegram Model Router (FORM 11): /models, /model <id>. FOOD Agent stays the default for everyone; Claude CLI is a
+  // TEXT-ONLY backend (every tool disabled) for the Telegram user ids listed here only — OFF unless enabled AND listed.
+  claudeCliEnabled: process.env.CLAUDE_CLI_ENABLED === "true",
+  claudeCliTelegramUserIds: (process.env.CLAUDE_CLI_TELEGRAM_USER_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),
+  claudeCliPath: process.env.CLAUDE_CLI_PATH || "", // the claude executable (never a .cmd/.ps1 shim); empty = auto-detect
+  claudeCliModel: process.env.CLAUDE_CLI_MODEL || "", // empty = the CLI's own default
+  claudeCliTimeoutMs: Number(process.env.CLAUDE_CLI_TIMEOUT_MS || 60000),
+  claudeCliMaxConcurrent: Number(process.env.CLAUDE_CLI_MAX_CONCURRENT || 2),
+  modelSelectionTtlMinutes: Number(process.env.MODEL_SELECTION_TTL_MINUTES || 720), // idle selection -> back to default
+
   // Knowledge Ingestion (Knowledge Group -> evidence -> review). OFF by default. Writes the WORKING
   // knowledge DB (the collector's), never the runtime snapshot customers read; nothing is published
   // automatically (review only).

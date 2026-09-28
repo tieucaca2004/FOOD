@@ -30,7 +30,8 @@
     "test:gpt-founder-live": "node --test platform/test/live/gptFounderAliasLive.test.js",
     "test:search-live": "node --test platform/test/live/searchLive.test.js",
     "bench:search": "node platform/test/bench/searchBenchmark.js",
-    "test:image-live": "node --test platform/test/live/imageUnderstandingLive.test.js"
+    "test:image-live": "node --test platform/test/live/imageUnderstandingLive.test.js",
+    "test:claude-cli-live": "node --test platform/test/live/claudeCliLive.test.js"
   },
   "engines": {
     "node": ">=18"

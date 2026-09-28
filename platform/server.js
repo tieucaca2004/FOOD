@@ -162,7 +162,12 @@ if (platformConfig.knowledgeIngestEnabled && platformConfig.knowledgeGroupChatId
 
 // the channels see the router through the contribution wrapper (same interface; text turns pass through unchanged)
 const channelRouter = contributionService ? contributionService.wrapRouter(router) : router;
-const app = createPlatformApp({ db: platformDb, repos, services, discovery, merchantRouter, registry, router: channelRouter, knowledgeIngest, contributions: Boolean(contributionService) });
+// Telegram Model Router (FORM 11): /models, /model; FOOD Agent stays the default. Only installed when a second backend
+// (Claude CLI) is enabled for at least one Telegram user id; otherwise Telegram sees channelRouter exactly as before.
+const { createTelegramModelRouter } = await import("./ai/models/index.js");
+const telegramModels = createTelegramModelRouter({ inner: channelRouter, gptModel: gpt ? gpt.provider?.model ?? platformConfig.foodAgentModel : null, logger });
+if (telegramModels.modelRouter) logger.info("APP", "telegram model router enabled", { claudeCliUsers: platformConfig.claudeCliTelegramUserIds.length });
+const app = createPlatformApp({ db: platformDb, repos, services, discovery, merchantRouter, registry, router: channelRouter, telegramRouter: telegramModels.router, knowledgeIngest, contributions: Boolean(contributionService) });
 
 const server = app.listen(platformConfig.port, () => {
   logger.info("APP", `Tổng Đài platform listening on :${platformConfig.port}`, {

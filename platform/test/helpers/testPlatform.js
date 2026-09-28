@@ -94,6 +94,7 @@ export function buildTestPlatform({
   gpt = null,
   knowledgeIngest = null,
   contributions = null,
+  telegramModels = null,
 } = {}) {
   const db = createPlatformConnection(":memory:");
   runPlatformMigrations(db);
@@ -199,7 +200,9 @@ export function buildTestPlatform({
   // contributions: a test-built ContributionService factory (off unless passed) — the channels then see the wrapped router
   const contributionService = typeof contributions === "function" ? contributions({ services, repos, foodKnowledge: agentSearch.foodKnowledge ?? null }) : null;
   const channelRouter = contributionService ? contributionService.wrapRouter(router) : router;
-  const app = createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router: channelRouter, knowledgeIngest, contributions: Boolean(contributionService) });
+  // telegramModels: a test-built Model Router factory (FORM 11; off unless passed) — only the Telegram channel sees it
+  const telegramRouter = typeof telegramModels === "function" ? telegramModels({ inner: channelRouter }) : channelRouter;
+  const app = createPlatformApp({ db, repos, services, discovery, merchantRouter, registry, router: channelRouter, telegramRouter, knowledgeIngest, contributions: Boolean(contributionService) });
 
   return { db, repos, services, ai, visionProvider, imageStorage, registry, merchantRouter, discovery, agentSearch, router, app, atieuCtx, contributionService };
 }
