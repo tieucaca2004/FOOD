@@ -49,9 +49,12 @@ export function createTelegramWebhookHandler({ repos, services, router, knowledg
     let event = normalizeTelegramUpdate(req.body);
     // Customer contributions (USER_CONTRIBUTIONS_ENABLED): a photo / image document (or unsupported media) is no
     // longer ignored — it goes, normalised, to the same pipeline; the router wrapper answers it. Text is unchanged.
+    // FORM 15: a photo / image document is a CONVERSATIONAL message for the FOOD Agent whatever contributions says
+    // (it is never silently ignored); other media keep their existing path (contributions only).
     let inbound = null;
-    if (!event && contributions) {
-      inbound = fromTelegramUpdate(req.body);
+    if (!event) {
+      const parsed = fromTelegramUpdate(req.body);
+      inbound = parsed && (parsed.attachments.length || contributions) ? parsed : null;
       if (inbound) {
         event = { channel: "telegram", updateId: inbound.updateId, messageId: inbound.messageId, externalChatId: inbound.externalChatId, externalUserId: inbound.externalUserId, text: inbound.text ?? "", timestamp: inbound.timestamp, displayName: inbound.displayName };
       }

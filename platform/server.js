@@ -4,7 +4,7 @@ import { createPlatformConnection, runPlatformMigrations } from "./db/connection
 import { runPlatformSeed } from "./db/seed.js";
 import { createPlatformRepositories } from "./repositories/index.js";
 import { createPlatformServices } from "./services/index.js";
-import { createConciergeAIProvider, createGptFoodConcierge } from "./ai/index.js";
+import { createConciergeAIProvider, createGptFoodConcierge, createConversationImageReader } from "./ai/index.js";
 import { MerchantRegistry, buildAtieuAdapterFactory, buildGenericAdapterFactory } from "./merchant/MerchantRegistry.js";
 import { MerchantRouter } from "./merchant/MerchantRouter.js";
 import { DiscoveryEngine } from "./discovery/DiscoveryEngine.js";
@@ -116,7 +116,31 @@ const gpt = await createGptFoodConcierge({ services, repos, agentSearch, merchan
 // the model the Agent's provider actually calls (FOOD_AGENT_MODEL > OPENAI_MODEL > default), not OPENAI_MODEL alone
 if (gpt) logger.info("APP", "gpt food concierge enabled", { model: gpt.provider?.model ?? platformConfig.foodAgentModel, timeoutMs: platformConfig.openaiTimeoutMs, maxToolTurns: platformConfig.openaiMaxToolTurns });
 else if (platformConfig.openaiEnabled) logger.warn("APP", "gpt food concierge NOT enabled: OPENAI_API_KEY or OPENAI_MODEL missing");
-const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai, gpt });
+// FOOD Agent multimodal conversation (FORM 15): a customer's photo -> the existing media fetchers + image reader ->
+// UNVERIFIED evidence for the Agent. Only with the Agent itself (its model, FOOD_AGENT_MODEL); independent of customer
+// contributions. Without it, a photo still gets a plain reply (never silence).
+let images = null;
+if (gpt) {
+  try {
+    const { customerImageEvidence, telegramFileFetcher } = await import("./services/knowledgeIngestAdapter.js");
+    const { zaloMediaFetcher } = await import("./channel/zalo/zaloMedia.js");
+    const { createImageConversation } = await import("./services/imageConversation.js");
+    const reader = await createConversationImageReader();
+    images = createImageConversation({
+      fetchTelegram: platformConfig.telegramBotToken ? telegramFileFetcher({ botToken: platformConfig.telegramBotToken, fetchImpl: globalThis.fetch }) : null,
+      fetchZalo: zaloMediaFetcher({ hosts: platformConfig.zaloMediaHosts, maxBytes: platformConfig.contributionMaxImageBytes }),
+      readEvidence: customerImageEvidence,
+      reader,
+      maxImageBytes: platformConfig.contributionMaxImageBytes,
+      readTimeoutMs: platformConfig.imageUnderstandingTimeoutMs,
+      logger,
+    });
+    logger.info("APP", "food agent image conversation enabled", { model: reader?.model ?? null });
+  } catch (err) {
+    logger.warn("APP", "food agent image conversation NOT enabled", { error: String(err?.message ?? err).slice(0, 160) });
+  }
+}
+const router = new PlatformRouter({ services, discovery, agentSearch, merchantRouter, ai, gpt, images });
 
 // Knowledge Ingestion: loaded ONLY when enabled AND a Knowledge Group is configured (default off).
 let knowledgeIngest = null;

@@ -5,7 +5,8 @@ import { KnowledgeIngestion } from "../knowledge/ingestion/ingestion.js";
 import { ContributionStore } from "../knowledge/ingestion/contributions.js";
 import { contributorHasherFromEnv } from "../knowledge/ingestion/contributorHash.js";
 import { classifyContributionText, classifyReply } from "../knowledge/ingestion/contributionIntent.js";
-import { IMAGE_LIMITS } from "../knowledge/ingestion/imageCheck.js";
+import { IMAGE_LIMITS, checkImage } from "../knowledge/ingestion/imageCheck.js";
+import { imageFindings } from "../knowledge/ingestion/imageFindings.js";
 import { normalizeName } from "../knowledge/text.js";
 import { TermRelationService } from "../knowledge/terms/termRelationService.js";
 import { termKey } from "../knowledge/terms/termNormalize.js";
@@ -214,6 +215,37 @@ export function createTermLearning({ dbPath, rawRoot, hashKey = "", hashKid = "k
       }
     },
     close: () => db.close(),
+  };
+}
+
+/**
+ * FOOD Agent multimodal conversation (FORM 15): what ONE customer photo shows, for the Agent to reason over — the same
+ * byte check and the same evidence-first reading as the contribution pipeline (checkImage -> reader.extractEvidence ->
+ * imageFindings), IN MEMORY only: nothing is stored, no candidate is created, nothing is reviewed. Everything returned
+ * is the CUSTOMER's unverified image data, never a FOOD fact.
+ * @param {{buffer: Buffer, claimedMimeType?: string|null, reader: {extractEvidence: Function}, maxBytes?: number}} args
+ */
+export async function customerImageEvidence({ buffer, claimedMimeType = null, reader, maxBytes = IMAGE_LIMITS.maxBytes }) {
+  const check = checkImage(buffer, { claimedMimeType, limits: { ...IMAGE_LIMITS, maxBytes } });
+  if (!check.ok) return { status: "unreadable", reason: check.reason };
+  const sha256 = crypto.createHash("sha256").update(buffer).digest("hex");
+  const reading = await reader.extractEvidence({ buffer, mimeType: check.mimeType, sha256 });
+  const { findings, placeText } = imageFindings(reading, reading.text);
+  const items = [];
+  for (const f of findings.filter((x) => x.kind === "price" || x.kind === "product")) {
+    const [lo, hi] = f.kind === "price" ? String(f.normalizedValue).split("-").map(Number) : [null, null];
+    items.push({ name: f.productText, price_text: f.kind === "price" ? f.rawValue : null, price: Number.isFinite(lo) ? lo : null, price_max: Number.isFinite(hi) ? hi : null, implausible: Boolean(f.implausible), line: f.segment });
+  }
+  const address = findings.find((x) => x.kind === "address")?.rawValue ?? null;
+  return {
+    status: "read",
+    document_type: reading.document_type,
+    text: String(reading.text ?? "").slice(0, 2000),
+    items,
+    place_name: placeText,
+    address,
+    food_guess: reading.food_guess ?? [],
+    image: { mime_type: check.mimeType, width: check.width, height: check.height, bytes: check.bytes, sha256 },
   };
 }
 

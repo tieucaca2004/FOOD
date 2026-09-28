@@ -128,6 +128,8 @@ function displayedDishes(operation, group) {
 }
 
 // FORM 13 — a reference-only place is never ordered: said plainly, deterministically
+// FORM 15 — a photo when the FOOD Agent cannot answer (off / failed): said plainly, never silence, never a fact
+const IMAGE_NOT_READ = "Dạ em đã nhận được ảnh của anh/chị, nhưng hiện em chưa trả lời được về ảnh này. Anh/chị nhắn giúp em tên món hoặc quán cần tìm nhé.";
 const REFERENCE_ONLY_ORDER = "Dạ quán này hiện chỉ có thông tin tham khảo, chưa hỗ trợ đặt món qua FOOD.";
 const escapeRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** The catalog dishes a merchant reply SHOWED as menu lines ("🍜 Name: …", "- Name: …"), in the order shown. */
@@ -147,7 +149,9 @@ const MENU_QUESTION = /\b(?:menu|thuc don|mon gi|co gi|ban gi|nhung mon nao|mon 
 const ORDER_CONTINUATION = new Set(["quantity_only", "adjust_quantity", "change_quantity", "choose_option", "confirm_order", "cancel_order", "provide_delivery_address", "ask_total", "review_order", "show_cart", "reorder"]);
 
 export class PlatformRouter {
-  constructor({ services, discovery, agentSearch, merchantRouter, ai, gpt = null, now = () => new Date(), merchantIdleMs = MERCHANT_IDLE_MS }) {
+  constructor({ services, discovery, agentSearch, merchantRouter, ai, gpt = null, images = null, now = () => new Date(), merchantIdleMs = MERCHANT_IDLE_MS }) {
+    // FORM 15 — services/imageConversation.js: a customer's photo -> UNVERIFIED evidence for the FOOD Agent (never a reply)
+    this.images = images;
     this.services = services;
     this.discovery = discovery;
     // Phase 2: global keyword search now goes through AgentSearchService
@@ -202,7 +206,9 @@ export class PlatformRouter {
     }
   }
 
-  async handle({ customer, session, text }) {
+  async handle({ customer, session, text, inbound = null }) {
+    // a photo (with or without a caption) is a conversational message: the FOOD Agent answers it (FORM 15)
+    if (inbound?.attachments?.some((a) => a.type === "image")) return this._imageTurn(customer, session, text, inbound);
     // FOOD-only scope guard, before anything else (0 GPT call, 0 search): image / video generation, secrets /
     // instruction overrides / shell-like input, and clearly non-food topics get the short scope reply
     const scope = classifyScope(text);
@@ -220,6 +226,45 @@ export class PlatformRouter {
       return this._handleWithinMerchant(customer, session, text, concierge);
     }
     return this._handleAtPlatform(customer, session, text, concierge);
+  }
+
+  /**
+   * A customer's photo: the image service prepares the evidence, the FOOD Agent answers (tools + Fact Guard as for any
+   * turn). With the Agent off or failing, a plain reply — never silence, never a fact read from the photo.
+   */
+  async _imageTurn(customer, session, text, inbound) {
+    const caption = String(text ?? "").trim();
+    if (caption) {
+      const scope = classifyScope(caption);
+      if (scope.scope === "OUT_OF_SCOPE") return { replyText: SCOPE_REPLY, session, scope, imageTurn: "scope" };
+    }
+    if (!this.gpt?.enabled()) return { replyText: IMAGE_NOT_READ, session, imageTurn: "agent_unavailable" };
+    let evidence;
+    try {
+      evidence = (await this.images?.read(inbound)) ?? { source: "customer_image", trust: "UNVERIFIED", status: "unavailable", reason: "no_image_service" };
+    } catch {
+      evidence = { source: "customer_image", trust: "UNVERIFIED", status: "unavailable", reason: "image_service_failed" };
+    }
+    this._rememberImage(customer.id, evidence);
+    let answer = null;
+    try {
+      answer = await this.gpt.respond({ customer, session, text: caption, reason: "image", imageEvidence: evidence });
+    } catch {
+      answer = null;
+    }
+    if (answer) return { replyText: answer.text, session, concierge: answer.meta, imageTurn: "agent" };
+    return { replyText: IMAGE_NOT_READ, session, imageTurn: "agent_failed", imageStatus: evidence.status };
+  }
+
+  /** The customer's latest photo evidence (for follow-ups on it), next to the conversation's working memory. */
+  _rememberImage(customerId, evidence) {
+    try {
+      const store = this._conversationStates();
+      const state = store.getByCustomer(customerId) ?? {};
+      store.saveForCustomer(customerId, { ...state, lastImage: { evidence, touchedAt: new Date().toISOString() } });
+    } catch {
+      // memory is a convenience: never fails a turn
+    }
   }
 
   async _handleWithinMerchant(customer, session, text, concierge) {

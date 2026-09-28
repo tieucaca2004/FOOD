@@ -128,6 +128,12 @@ const OPEN_CLAIM = /(đang mở|còn mở|mở cửa (?:lúc|từ|đến|tới|v
 const OPEN_NOW = /(đang mở|còn mở|vẫn mở)/iu;
 const NEGATED_ORDER = /(chưa|không|ko|k)\s+(?:thể\s+)?(đặt|order|giao)/giu;
 const ORDER_CLAIM = /(đặt được|đặt qua food|đặt món|có thể đặt|thêm vào giỏ|giao (?:hàng|tận|tới|đến)|ship)/iu;
+// FORM 15D — an ordering phrase inside an OFFER / QUESTION to the customer claims nothing about any place: in the same
+// clause, before the phrase, the customer is asked or offered ("có muốn … đặt món không?", "nếu muốn đặt món", "em có
+// thể giúp … đặt món", "muốn hỏi quán nào có ship không?"), or it is a "… nào … ?" question
+const ORDER_CLAIM_ALL = new RegExp(ORDER_CLAIM.source, "giu");
+const ORDER_OFFER = /(?:^|[\s,])(?:muốn|nếu|giúp|có cần|cần em|hỏi)(?=[\s,]|$)/iu;
+const ORDER_WHICH = /(?:^|\s)nào(?=[\s,?]|$)/iu;
 const RATING_CLAIM = /(\d(?:[.,]\d)?\s*(?:\/\s*5|sao)(?![\p{L}])|đánh giá (?:cao|tốt|\d)|review)/iu;
 const RANKING = /(ngon nhất|tốt nhất|rẻ nhất|nổi tiếng nhất|đông khách nhất|số\s*1|number one|best)/iu;
 const PROPER = /\p{Lu}[\p{Ll}\p{M}]+(?:\s+\p{Lu}[\p{Ll}\p{M}]*)+/gu;
@@ -197,8 +203,7 @@ export function checkAnswer(answer, ledger, { userText = "", contextText = "" } 
   const pool = referenced.length ? referenced : [...ledger.merchants.values()];
   if (OPEN_NOW.test(prose) && !pool.some((m) => m.openStatus === "open")) violations.push("UNSUPPORTED_OPEN_NOW");
   else if (OPEN_CLAIM.test(prose) && !pool.some((m) => (m.openingHours ?? []).length)) violations.push("UNSUPPORTED_OPENING_HOURS");
-  const positiveOrder = prose.replace(NEGATED_ORDER, " ");
-  if (ORDER_CLAIM.test(positiveOrder) && !pool.some((m) => m.orderable)) violations.push("UNSUPPORTED_ORDERABILITY");
+  if (!pool.some((m) => m.orderable) && orderClaims(prose).length) violations.push("UNSUPPORTED_ORDERABILITY");
   if (RATING_CLAIM.test(prose) && !pool.some((m) => (m.ratings ?? []).length)) violations.push("UNSUPPORTED_RATING");
   if (RANKING.test(prose)) violations.push("RANKING_NOT_ALLOWED");
   const known = `${ledger.corpus()} \n ${foldText(userText)} \n ${foldText(contextText)}`;
@@ -248,13 +253,39 @@ function moneyAmountsAt(text) {
   return [...String(text ?? "").matchAll(MONEY)].map((m) => ({ ...moneyAmounts(m[0])[0], index: m.index }));
 }
 
+/** The ordering CLAIMS of a text: ordering phrases that are neither negated nor part of an offer / question. */
+function orderClaims(prose) {
+  const text = String(prose);
+  const positive = text.replace(NEGATED_ORDER, (m) => " ".repeat(m.length)); // same length: indexes stay valid
+  const claims = [];
+  for (const m of positive.matchAll(ORDER_CLAIM_ALL)) {
+    const sentence = sentenceAt(text, m.index);
+    const start = text.lastIndexOf(sentence, m.index);
+    const before = sentence.slice(0, Math.max(0, m.index - start));
+    const clause = before.slice(Math.max(before.lastIndexOf(","), before.lastIndexOf(";"), before.lastIndexOf(":")) + 1);
+    const question = text[start + sentence.length] === "?";
+    if (ORDER_OFFER.test(clause) || (question && ORDER_WHICH.test(clause))) continue;
+    claims.push(m[0]);
+  }
+  return claims;
+}
+
 /** The sentence around a position (the unit an attribution must share with the amount). */
 function sentenceAt(text, index) {
   const s = String(text);
-  const stops = [".", "!", "?", "\n"];
-  const start = Math.max(...stops.map((c) => s.lastIndexOf(c, index - 1))) + 1;
-  const ends = stops.map((c) => s.indexOf(c, index)).filter((i) => i >= 0);
-  return s.slice(start, ends.length ? Math.min(...ends) : s.length);
+  // a "." between two digits is a thousands separator ("40.000đ", "1.200.000đ"), never the end of a sentence
+  const isStop = (i) => ".!?\n".includes(s[i]) && !(s[i] === "." && /\d/.test(s[i - 1] ?? "") && /\d/.test(s[i + 1] ?? ""));
+  let start = 0;
+  for (let i = index - 1; i >= 0; i--) if (isStop(i)) {
+    start = i + 1;
+    break;
+  }
+  let end = s.length;
+  for (let i = index; i < s.length; i++) if (isStop(i)) {
+    end = i;
+    break;
+  }
+  return s.slice(start, end);
 }
 
 const BUDGET_BEFORE = /(?:dưới|trên|hơn|khoảng|tầm|không quá|tối đa|ngân sách|budget|trong|với|từ|đến|tới|(?:tầm|mức|khoảng) giá)\s*$/iu;

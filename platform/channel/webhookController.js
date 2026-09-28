@@ -16,9 +16,12 @@ export function createPlatformWebhookHandler({ repos, services, router, contribu
     let event = normalizeZaloTextEvent(req.body);
     // Customer contributions (USER_CONTRIBUTIONS_ENABLED): user_send_image (and unsupported media) -> the same
     // normalised shape as Telegram; the router wrapper answers it. Text events are unchanged.
+    // FORM 15: user_send_image is a CONVERSATIONAL message for the FOOD Agent whatever contributions says (never
+    // silently ignored); other media keep their existing path (contributions only).
     let inbound = null;
-    if (!event && contributions) {
-      inbound = fromZaloEvent(req.body);
+    if (!event) {
+      const parsed = fromZaloEvent(req.body);
+      inbound = parsed && (parsed.attachments.length || contributions) ? parsed : null;
       if (inbound) event = { zaloUserId: inbound.externalUserId, text: inbound.text ?? "", messageId: inbound.messageId, displayName: inbound.displayName, timestamp: inbound.timestamp };
     }
     if (!event) {

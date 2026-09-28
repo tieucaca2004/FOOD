@@ -19,6 +19,7 @@ export async function createGptFoodConcierge({ services, repos, agentSearch, mer
     maxToolTurns: platformConfig.openaiMaxToolTurns,
     history: conversationHistory(repos, platformConfig.foodAgentHistoryTurns),
     learning: await agentLearning({ agentSearch, logger }),
+    imageMemory: customerImageMemory(repos),
   };
   // knowledge layers only when a flag asks for them — with both flags OFF this is exactly the GPT-2 concierge
   if (platformConfig.founderKnowledgeEnabled || platformConfig.foodAliasKnowledgeEnabled || platformConfig.searchIntelligenceEnabled || contributions) {
@@ -52,6 +53,28 @@ async function agentLearning({ agentSearch, logger }) {
  * The Agent's view of the conversation: the last turns of this session from platform_messages (the log the channels
  * already write), oldest first, without the message being answered now. Read-only; no new state.
  */
+// FORM 15 — the customer's latest photo (the evidence the router stored for THIS customer, 30 minutes): what the Agent
+// may still refer to on the next turns ("giá món này?" after a menu photo). Unverified customer data, never a fact.
+export const IMAGE_MEMORY_TTL_MS = 30 * 60 * 1000;
+export function customerImageMemory(repos, ttlMs = IMAGE_MEMORY_TTL_MS) {
+  if (!repos?.conversationStates?.getByCustomer) return null;
+  return (customer) => {
+    if (!customer?.id) return null;
+    const memo = repos.conversationStates.getByCustomer(customer.id)?.lastImage;
+    return memo?.evidence && Date.now() - Date.parse(memo.touchedAt) <= ttlMs ? memo.evidence : null;
+  };
+}
+
+/**
+ * The image reader of the FOOD Agent's conversation: the EXISTING OpenAIImageUnderstanding (no second Vision
+ * implementation), on the Agent's own model (FOOD_AGENT_MODEL) — only when the Agent itself is enabled; else null.
+ */
+export async function createConversationImageReader() {
+  if (!platformConfig.openaiEnabled || !platformConfig.openaiApiKey) return null;
+  const { OpenAIImageUnderstanding } = await import("./ingest/OpenAIImageUnderstanding.js");
+  return new OpenAIImageUnderstanding({ model: platformConfig.foodAgentModel });
+}
+
 export function conversationHistory(repos, turns) {
   if (!turns || !repos?.messages?.recentForSession) return null;
   return (session, text) => {
