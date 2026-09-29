@@ -3,16 +3,17 @@ import { ConciergeAnthropicProvider } from "./ConciergeAnthropicProvider.js";
 import { platformConfig } from "../config.js";
 
 /**
- * GPT FOOD concierge, or null when it is not fully enabled (OPENAI_ENABLED=true + key + model).
+ * GPT FOOD concierge, or null when it is not fully enabled (OPENAI_ENABLED=true + a usable model provider).
  * Built only from the services the router already has; nothing here is imported by the router.
  */
 export async function createGptFoodConcierge({ services, repos, agentSearch, merchantRouter, logger, contributions = null }) {
-  if (!platformConfig.openaiEnabled || !platformConfig.openaiApiKey || !platformConfig.openaiModel) return null;
-  const { OpenAIProvider } = await import("./openai/OpenAIProvider.js");
+  if (!platformConfig.openaiEnabled) return null;
+  const provider = await createFoodAgentProvider({ logger });
+  if (!provider) return null;
   const { FoodTools } = await import("./foodConcierge/foodTools.js");
   const { GptFoodConcierge } = await import("./foodConcierge/GptFoodConcierge.js");
   const deps = {
-    provider: new OpenAIProvider({ model: platformConfig.foodAgentModel }),
+    provider,
     tools: new FoodTools({ services, repos, agentSearch, merchantRouter }),
     logger,
     timeoutMs: platformConfig.openaiTimeoutMs,
@@ -32,6 +33,31 @@ export async function createGptFoodConcierge({ services, repos, agentSearch, mer
     }
   }
   return new GptFoodConcierge(deps);
+}
+
+/**
+ * The model provider of the FOOD Agent, or null when none can be called.
+ * - FOOD_AGENT_PRIMARY_MODEL unset: OpenAI alone on FOOD_AGENT_MODEL (the Agent as before).
+ * - FOOD_AGENT_PRIMARY_MODEL set: DeepSeek on that model first, OpenAI on FOOD_AGENT_FALLBACK_MODEL when a DeepSeek call
+ *   fails (per call, platform/ai/fallbackProvider.js). A missing key on either side is logged, never silent.
+ */
+export async function createFoodAgentProvider({ logger = null, fetchImpl = globalThis.fetch } = {}) {
+  const { OpenAIProvider } = await import("./openai/OpenAIProvider.js");
+  if (!platformConfig.foodAgentPrimaryModel) {
+    if (!platformConfig.openaiApiKey || !platformConfig.openaiModel) return null;
+    return new OpenAIProvider({ model: platformConfig.foodAgentModel, fetchImpl });
+  }
+  const { DeepSeekProvider } = await import("./deepseek/DeepSeekProvider.js");
+  const { FallbackProvider } = await import("./fallbackProvider.js");
+  const primary = new DeepSeekProvider({ fetchImpl });
+  // GPT-4o is not a reasoning model: no encrypted reasoning is asked of the fallback
+  const fallback = new OpenAIProvider({ model: platformConfig.foodAgentFallbackModel, includeReasoning: false, fetchImpl });
+  if (!primary.configured) logger?.error?.("APP", "food agent PRIMARY model is set but DEEPSEEK_API_KEY is missing: the Agent runs on the fallback only", { primary: primary.model, fallback: fallback.configured ? fallback.model : null });
+  if (!fallback.configured) logger?.warn?.("APP", "food agent has NO fallback model: OPENAI_API_KEY or FOOD_AGENT_FALLBACK_MODEL missing", { primary: primary.model });
+  if (!primary.configured && !fallback.configured) return null;
+  const provider = new FallbackProvider({ primary, fallback, logger, primaryTimeoutShare: platformConfig.foodAgentPrimaryTimeoutShare });
+  logger?.info?.("APP", "food agent model routing", provider.describe());
+  return provider;
 }
 
 /** Controlled learning for the Agent (FOOD_AGENT_LEARNING_ENABLED): DRAFT candidates only, read-only APPROVED matcher. */
@@ -67,12 +93,13 @@ export function customerImageMemory(repos, ttlMs = IMAGE_MEMORY_TTL_MS) {
 
 /**
  * The image reader of the FOOD Agent's conversation: the EXISTING OpenAIImageUnderstanding (no second Vision
- * implementation), on the Agent's own model (FOOD_AGENT_MODEL) — only when the Agent itself is enabled; else null.
+ * implementation), always on OpenAI, on the Agent's OpenAI model (FOOD_AGENT_FALLBACK_MODEL > FOOD_AGENT_MODEL >
+ * OPENAI_MODEL) — never the primary (DeepSeek) model. Only when the Agent itself is enabled; else null.
  */
 export async function createConversationImageReader() {
   if (!platformConfig.openaiEnabled || !platformConfig.openaiApiKey) return null;
   const { OpenAIImageUnderstanding } = await import("./ingest/OpenAIImageUnderstanding.js");
-  return new OpenAIImageUnderstanding({ model: platformConfig.foodAgentModel });
+  return new OpenAIImageUnderstanding({ model: platformConfig.foodAgentFallbackModel });
 }
 
 export function conversationHistory(repos, turns) {

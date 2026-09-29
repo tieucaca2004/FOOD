@@ -47,6 +47,17 @@ export const platformConfig = {
   foodAgentLearningEnabled: process.env.FOOD_AGENT_LEARNING_ENABLED === "true",
   // stateless calls (store=false); reasoning items are echoed back encrypted between tool turns
   openaiIncludeReasoning: process.env.OPENAI_INCLUDE_REASONING !== "false",
+  // FOOD Agent model routing (platform/ai/fallbackProvider.js). With FOOD_AGENT_PRIMARY_MODEL set, the Agent calls
+  // DeepSeek (its OpenAI-compatible Responses API) first and OpenAI (FOOD_AGENT_FALLBACK_MODEL, default the model
+  // above) when a DeepSeek call fails; unset, the Agent is exactly the OpenAI-only Agent. Still OFF unless
+  // OPENAI_ENABLED=true. Keys only from the environment.
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY || "",
+  deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+  foodAgentPrimaryModel: process.env.FOOD_AGENT_PRIMARY_MODEL || "",
+  // the Agent's OpenAI model: the fallback, and the model that reads a customer's photo (never the DeepSeek model)
+  foodAgentFallbackModel: process.env.FOOD_AGENT_FALLBACK_MODEL || process.env.FOOD_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
+  // the primary's share of the time left for a model call; the fallback gets the rest of the same turn budget
+  foodAgentPrimaryTimeoutShare: Number(process.env.FOOD_AGENT_PRIMARY_TIMEOUT_SHARE || 0.6),
 
   // GPT concierge knowledge layers (independent, OFF by default; only used when the GPT concierge is on):
   // founder guidance (FK-1, APPROVED customer items) and food-name / alias recognition (APPROVED term relations).

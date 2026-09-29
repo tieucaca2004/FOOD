@@ -14,7 +14,7 @@ import { config } from "../../src/config.js";
 // The flag is read per request. Tests that exercise sending install their own
 // fake fetch on top of this one.
 const EXTERNAL_MESSAGING_API = /^https:\/\/(api\.telegram\.org|openapi\.zalo\.me)\//;
-const EXTERNAL_AI_API = /^https:\/\/(api\.openai\.com|api\.anthropic\.com)\//;
+const EXTERNAL_AI_API = /^https:\/\/(api\.openai\.com|api\.anthropic\.com|api\.deepseek\.com)\//;
 const realFetch = globalThis.fetch;
 globalThis.fetch = (input, options) => {
   const url = String(input?.url ?? input);

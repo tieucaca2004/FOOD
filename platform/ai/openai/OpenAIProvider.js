@@ -29,8 +29,10 @@ export class OpenAIProvider {
     baseUrl = platformConfig.openaiBaseUrl,
     includeReasoning = platformConfig.openaiIncludeReasoning,
     fetchImpl = globalThis.fetch,
+    label = "OpenAI", // names the service in error messages (another Responses-compatible API reuses this client)
   } = {}) {
     this.apiKey = apiKey;
+    this.label = label;
     this.model = model;
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.includeReasoning = includeReasoning;
@@ -46,7 +48,7 @@ export class OpenAIProvider {
    * @returns {Promise<{id: string|null, output: object[], functionCalls: {callId: string, name: string, arguments: string}[], text: string, usage: object|null}>}
    */
   async respond({ instructions, input, tools = [], format = null, timeoutMs }) {
-    if (!this.configured) throw new OpenAIProviderError("not_configured", "OpenAI is not configured");
+    if (!this.configured) throw new OpenAIProviderError("not_configured", `${this.label} is not configured`);
     const body = {
       model: this.model,
       instructions,
@@ -67,19 +69,19 @@ export class OpenAIProvider {
         signal: controller.signal,
       });
     } catch (err) {
-      throw err?.name === "AbortError" ? new OpenAIProviderError("timeout", "OpenAI request timed out") : new OpenAIProviderError("network", `OpenAI request failed: ${err?.message ?? err}`);
+      throw err?.name === "AbortError" ? new OpenAIProviderError("timeout", `${this.label} request timed out`) : new OpenAIProviderError("network", `${this.label} request failed: ${err?.message ?? err}`);
     } finally {
       clearTimeout(timer);
     }
-    if (res.status === 429) throw new OpenAIProviderError("rate_limit", "OpenAI rate limit", 429);
-    if (!res.ok) throw new OpenAIProviderError("http", `OpenAI HTTP ${res.status}`, res.status);
+    if (res.status === 429) throw new OpenAIProviderError("rate_limit", `${this.label} rate limit`, 429);
+    if (!res.ok) throw new OpenAIProviderError("http", `${this.label} HTTP ${res.status}`, res.status);
     let data;
     try {
       data = await res.json();
     } catch {
-      throw new OpenAIProviderError("invalid_response", "OpenAI response is not JSON");
+      throw new OpenAIProviderError("invalid_response", `${this.label} response is not JSON`);
     }
-    if (!Array.isArray(data?.output)) throw new OpenAIProviderError("invalid_response", "OpenAI response has no output");
+    if (!Array.isArray(data?.output)) throw new OpenAIProviderError("invalid_response", `${this.label} response has no output`);
     const functionCalls = data.output
       .filter((item) => item.type === "function_call")
       .map((item) => ({ callId: item.call_id, name: item.name, arguments: item.arguments ?? "{}" }));

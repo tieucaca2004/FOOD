@@ -15,7 +15,7 @@ function digest(value) {
 
 // Other credentials the admin token must never equal. The Telegram webhook
 // secret in particular travels in every webhook request.
-const OTHER_SECRETS = ["telegramWebhookSecret", "telegramBotToken", "zaloAccessToken", "zaloOaSecretKey", "anthropicApiKey", "openaiApiKey"];
+const OTHER_SECRETS = ["telegramWebhookSecret", "telegramBotToken", "zaloAccessToken", "zaloOaSecretKey", "anthropicApiKey", "openaiApiKey", "deepseekApiKey"];
 
 // Why the configured admin token cannot be used, or null when it can. The
 // reasons name the problem, never the value.

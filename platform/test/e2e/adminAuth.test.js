@@ -312,7 +312,7 @@ test("a configured admin token containing whitespace or commas (which no Bearer 
 });
 
 test("an admin token that reuses another configured credential is refused", async () => {
-  const fields = ["telegramWebhookSecret", "telegramBotToken", "zaloAccessToken", "zaloOaSecretKey", "anthropicApiKey", "openaiApiKey"];
+  const fields = ["telegramWebhookSecret", "telegramBotToken", "zaloAccessToken", "zaloOaSecretKey", "anthropicApiKey", "openaiApiKey", "deepseekApiKey"];
   for (const field of fields) {
     const saved = platformConfig[field];
     platformConfig[field] = ADMIN_TOKEN;

@@ -1,7 +1,7 @@
 // Guards the test infrastructure itself (TEST-002): no automated test may
-// reach a real external API (Telegram, Zalo, OpenAI, Anthropic), even when a
-// developer's .env provides real credentials. Only the live AI tests
-// (platform/test/live/*) may reach OpenAI/Anthropic, and only while
+// reach a real external API (Telegram, Zalo, OpenAI, Anthropic, DeepSeek), even
+// when a developer's .env provides real credentials. Only the live AI tests
+// (platform/test/live/*) may reach OpenAI/Anthropic/DeepSeek, and only while
 // FOOD_LIVE_AI_TESTS=1 is set; the flag is read at request time.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -42,6 +42,7 @@ const TELEGRAM = "https://api.telegram.org/botX/sendMessage";
 const ZALO = "https://openapi.zalo.me/v3.0/oa/message/cs";
 const OPENAI = "https://api.openai.com/v1/responses";
 const ANTHROPIC = "https://api.anthropic.com/v1/messages";
+const DEEPSEEK = "https://api.deepseek.com/responses";
 
 test("with real-looking credentials in the environment, the harness clears the messaging tokens and blocks every external API", () => {
   const result = runIsolated(
@@ -53,6 +54,7 @@ test("with real-looking credentials in the environment, the harness clears the m
       zalo: await outcome(${JSON.stringify(ZALO)}),
       openai: await outcome(${JSON.stringify(OPENAI)}),
       anthropic: await outcome(${JSON.stringify(ANTHROPIC)}),
+      deepseek: await outcome(${JSON.stringify(DEEPSEEK)}),
       passedThrough,
     }));`,
     {
@@ -62,6 +64,8 @@ test("with real-looking credentials in the environment, the harness clears the m
       OPENAI_ENABLED: "true",
       OPENAI_API_KEY: "fake-openai-key",
       ANTHROPIC_API_KEY: "fake-anthropic-key",
+      DEEPSEEK_API_KEY: "fake-deepseek-key",
+      FOOD_AGENT_PRIMARY_MODEL: "deepseek-flash",
     }
   );
   assert.deepEqual(result, {
@@ -72,22 +76,24 @@ test("with real-looking credentials in the environment, the harness clears the m
     zalo: "blocked",
     openai: "blocked",
     anthropic: "blocked",
+    deepseek: "blocked",
     passedThrough: [],
   });
 });
 
-test("FOOD_LIVE_AI_TESTS=1 lets only OpenAI and Anthropic through; messaging APIs stay blocked", () => {
+test("FOOD_LIVE_AI_TESTS=1 lets only OpenAI, Anthropic and DeepSeek through; messaging APIs stay blocked", () => {
   const result = runIsolated(
     `process.stdout.write(JSON.stringify({
       openai: await outcome(${JSON.stringify(OPENAI)}),
       anthropic: await outcome(${JSON.stringify(ANTHROPIC)}),
+      deepseek: await outcome(${JSON.stringify(DEEPSEEK)}),
       telegram: await outcome(${JSON.stringify(TELEGRAM)}),
       zalo: await outcome(${JSON.stringify(ZALO)}),
       passedThrough,
     }));`,
     { FOOD_LIVE_AI_TESTS: "1" }
   );
-  assert.deepEqual(result, { openai: "passed", anthropic: "passed", telegram: "blocked", zalo: "blocked", passedThrough: [OPENAI, ANTHROPIC] });
+  assert.deepEqual(result, { openai: "passed", anthropic: "passed", deepseek: "passed", telegram: "blocked", zalo: "blocked", passedThrough: [OPENAI, ANTHROPIC, DEEPSEEK] });
 });
 
 test("the live flag is read at request time, and only the exact value 1 counts", () => {
@@ -97,12 +103,16 @@ test("the live flag is read at request time, and only the exact value 1 counts",
       if (value === undefined) delete process.env.FOOD_LIVE_AI_TESTS;
       else process.env.FOOD_LIVE_AI_TESTS = value;
       seen[String(value)] = await outcome(${JSON.stringify(OPENAI)});
+      seen["deepseek " + String(value)] = await outcome(${JSON.stringify(DEEPSEEK)});
     }
     delete process.env.FOOD_LIVE_AI_TESTS;
     seen.afterUnset = await outcome(${JSON.stringify(OPENAI)});
     process.stdout.write(JSON.stringify(seen));
   `);
-  assert.deepEqual(result, { undefined: "blocked", true: "blocked", yes: "blocked", 0: "blocked", " 1": "blocked", 1: "passed", afterUnset: "blocked" });
+  assert.deepEqual(result, {
+    undefined: "blocked", true: "blocked", yes: "blocked", 0: "blocked", " 1": "blocked", 1: "passed", afterUnset: "blocked",
+    "deepseek undefined": "blocked", "deepseek true": "blocked", "deepseek yes": "blocked", "deepseek 0": "blocked", "deepseek  1": "blocked", "deepseek 1": "passed",
+  });
 });
 
 test("the normal test scripts never set FOOD_LIVE_AI_TESTS", () => {
