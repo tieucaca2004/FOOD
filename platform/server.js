@@ -170,6 +170,11 @@ const server = app.listen(platformConfig.port, () => {
     webhookPath: platformConfig.webhookPath,
     aiProvider: platformConfig.aiProvider,
   });
+  if (!platformConfig.enableZaloSignatureCheck) {
+    logger.warn("APP", `PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK=false: ${platformConfig.webhookPath} accepts unsigned Zalo requests`);
+  } else if (!platformConfig.zaloOaSecretKey) {
+    logger.warn("APP", `PLATFORM_ZALO_OA_SECRET_KEY is not set: ${platformConfig.webhookPath} rejects every Zalo request`);
+  }
   // Names the problem only; the token itself is never logged.
   const adminProblem = adminTokenProblem();
   if (adminProblem) {

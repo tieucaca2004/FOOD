@@ -11,7 +11,9 @@ export const platformConfig = {
   zaloOaSecretKey: process.env.PLATFORM_ZALO_OA_SECRET_KEY || "",
   zaloSendRetries: Number(process.env.PLATFORM_ZALO_SEND_RETRIES || 3),
   zaloSendTimeoutMs: Number(process.env.PLATFORM_ZALO_SEND_TIMEOUT_MS || 8000),
-  enableZaloSignatureCheck: process.env.PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK === "true",
+  // Fail closed: the webhook is public, so only an explicit "false" turns
+  // signature checking off (see platform/channel/verifyZaloSignature.js).
+  enableZaloSignatureCheck: (process.env.PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK ?? "").trim().toLowerCase() !== "false",
 
   // Telegram (Phase 8.x-T) — secondary channel. telegramBotToken is used by
   // platform/channel/telegram/telegramClient.js to send replies back.

@@ -19,7 +19,7 @@ function withSignatureConfig(overrides, fn) {
   }
 }
 
-test("disabled by default: any body/headers pass when enableZaloSignatureCheck is false", () => {
+test("explicitly disabled: any body/headers pass when enableZaloSignatureCheck is false", () => {
   withSignatureConfig({ enableZaloSignatureCheck: false, zaloOaSecretKey: "irrelevant" }, () => {
     assert.equal(verifyPlatformZaloSignature("anything", {}), true);
     assert.equal(verifyPlatformZaloSignature("", { "x-zevent-signature": "bogus" }), true);
