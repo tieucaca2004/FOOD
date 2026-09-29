@@ -18,6 +18,9 @@ import { platformConfig } from "../../config.js";
 import { classifyConciergeIntent } from "../../nlp/concierge.js";
 
 const LIVE = platformConfig.openaiEnabled && Boolean(platformConfig.openaiApiKey);
+// The test harness blocks OpenAI/Anthropic unless this is set; only the live
+// AI tests set it, and only when a live run was explicitly configured.
+if (LIVE) process.env.FOOD_LIVE_AI_TESTS = "1";
 const SKIP = !LIVE && "OPENAI_ENABLED=true and OPENAI_API_KEY are required (not set)";
 const RUNTIME_DB = platformConfig.knowledgeDbPath;
 const COLLECTOR_DB = platformConfig.knowledgeIngestDbPath;

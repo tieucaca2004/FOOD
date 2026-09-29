@@ -22,6 +22,9 @@ import { KnowledgeAwareConcierge, createKnowledgeLayers } from "../../ai/foodCon
 import { platformConfig } from "../../config.js";
 
 const LIVE = platformConfig.openaiEnabled && Boolean(platformConfig.openaiApiKey);
+// The test harness blocks OpenAI/Anthropic unless this is set; only the live
+// AI tests set it, and only when a live run was explicitly configured.
+if (LIVE) process.env.FOOD_LIVE_AI_TESTS = "1";
 const RUNTIME_DB = platformConfig.knowledgeDbPath;
 const COLLECTOR_DB = platformConfig.knowledgeIngestDbPath;
 const sha = (f) => (fs.existsSync(f) ? crypto.createHash("sha256").update(fs.readFileSync(f)).digest("hex") : null);

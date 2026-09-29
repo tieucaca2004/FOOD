@@ -29,6 +29,11 @@ export const TEST_ADMIN_TOKEN = "test-only-admin-token-" + "0".repeat(40);
 export const ADMIN_AUTH_HEADER = { authorization: `Bearer ${TEST_ADMIN_TOKEN}` };
 platformConfig.adminApiToken = TEST_ADMIN_TOKEN;
 
+// The testApp.js import above already blocks real external APIs; also clear
+// the platform's own messaging credentials so no test even attempts a send.
+platformConfig.zaloAccessToken = "";
+platformConfig.telegramBotToken = "";
+
 // Zalo fixtures in the suites are unsigned; the signature tests turn the
 // check back on explicitly.
 platformConfig.enableZaloSignatureCheck = false;
