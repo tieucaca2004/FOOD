@@ -99,4 +99,3 @@ test("booted with a token, the admin API accepts it and the token never appears 
     await server.stop();
   }
 });
-
