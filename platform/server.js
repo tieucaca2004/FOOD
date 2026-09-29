@@ -11,6 +11,7 @@ import { DiscoveryEngine } from "./discovery/DiscoveryEngine.js";
 import { AgentSearchService } from "./services/agentSearchService.js";
 import { PlatformRouter } from "./router/PlatformRouter.js";
 import { createPlatformApp } from "./api/app.js";
+import { adminTokenProblem } from "./api/middleware/adminAuth.js";
 
 // A Tiểu's own engine, imported UNCHANGED — this is the "Merchant Matrix"
 // running in-process, exactly as it does standalone via src/server.js. The
@@ -169,6 +170,11 @@ const server = app.listen(platformConfig.port, () => {
     webhookPath: platformConfig.webhookPath,
     aiProvider: platformConfig.aiProvider,
   });
+  // Names the problem only; the token itself is never logged.
+  const adminProblem = adminTokenProblem();
+  if (adminProblem) {
+    logger.warn("APP", `PLATFORM_ADMIN_API_TOKEN ${adminProblem}: the admin API /api/platform/merchants* refuses every request`);
+  }
 });
 
 // Merchant order dispatch: re-deliver generic orders whose notification to

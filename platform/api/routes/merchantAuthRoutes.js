@@ -1,17 +1,16 @@
 import { Router } from "express";
+import { adminAuth } from "../middleware/adminAuth.js";
 
 function asyncRoute(fn) {
   return (req, res, next) => fn(req, res, next).catch(next);
 }
 
-// Admin-only action — same unauthenticated trust boundary the existing
-// /api/platform/merchants onboarding endpoints already use (see
-// merchantRoutes.js). Mints/rotates the API key a merchant uses against
-// the Phase 7 merchant-facing routes (merchantOrderRoutes.js). Phase 7
-// does not introduce a new admin-authentication system — only a
-// merchant one.
+// Admin-only action, behind the platform admin token (see adminAuth.js).
+// Mints/rotates the API key a merchant uses against the Phase 7
+// merchant-facing routes (merchantOrderRoutes.js).
 export function merchantAuthRoutes({ merchantAuthService }) {
   const router = Router();
+  router.use("/merchants", adminAuth());
 
   router.post(
     "/merchants/:id/api-keys",

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTestPlatform, startServer, baseUrl } from "../helpers/testPlatform.js";
+import { buildTestPlatform, startServer, baseUrl, ADMIN_AUTH_HEADER } from "../helpers/testPlatform.js";
 
 async function createOrderViaApi(platform) {
   const customer = platform.services.customers.getOrCreateByZaloUserId(`e2e-${Date.now()}-${Math.random()}`, "E2E Customer");
@@ -55,7 +55,7 @@ test("admin issues an API key, merchant authenticates with it, lists and reads i
   try {
     const order = await createOrderViaApi(platform);
 
-    const issueRes = await fetch(`${baseUrl(server)}/api/platform/merchants/MERCHANT002/api-keys`, { method: "POST" });
+    const issueRes = await fetch(`${baseUrl(server)}/api/platform/merchants/MERCHANT002/api-keys`, { method: "POST", headers: ADMIN_AUTH_HEADER });
     assert.equal(issueRes.status, 201);
     const { api_key: apiKey } = await issueRes.json();
     assert.ok(apiKey.startsWith("mk_"));
@@ -99,7 +99,7 @@ test("merchant A's API key cannot read or receive merchant B's order over real H
     platform.services.cart.addItem(customer.id, cartB.id, "MERCHANT003", productB.id, 1);
     const orderB = await platform.services.orders.confirmOrder(customer.id, cartB.id);
 
-    const issueRes = await fetch(`${baseUrl(server)}/api/platform/merchants/MERCHANT002/api-keys`, { method: "POST" });
+    const issueRes = await fetch(`${baseUrl(server)}/api/platform/merchants/MERCHANT002/api-keys`, { method: "POST", headers: ADMIN_AUTH_HEADER });
     const { api_key: apiKeyA } = await issueRes.json();
 
     const getRes = await fetch(`${baseUrl(server)}/api/platform/merchant/orders/${orderB.id}`, {
@@ -125,7 +125,7 @@ test("issuing a new API key for a merchant does not disturb sibling routes (heal
     assert.equal(healthRes.status, 200);
     const searchRes = await fetch(`${baseUrl(server)}/api/platform/search?q=test`);
     assert.equal(searchRes.status, 200);
-    const merchantsRes = await fetch(`${baseUrl(server)}/api/platform/merchants`);
+    const merchantsRes = await fetch(`${baseUrl(server)}/api/platform/merchants`, { headers: ADMIN_AUTH_HEADER });
     assert.equal(merchantsRes.status, 200);
   } finally {
     server.close();
