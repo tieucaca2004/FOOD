@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { adminAuth } from "../middleware/adminAuth.js";
 
 function asyncRoute(fn) {
   return (req, res, next) => fn(req, res, next).catch(next);
@@ -15,9 +16,12 @@ function requireString(value, field) {
 
 // Merchant onboarding + admin review API (spec §13/§16). No merchant is
 // ever discoverable straight out of onboarding — activate() is a separate,
-// explicit admin action.
+// explicit admin action. Every /merchants* route requires the platform admin
+// token; the guard is registered on this router, not at app level, so it sees
+// the same path the routes below are matched against.
 export function merchantRoutes({ services, repos, registry }) {
   const router = Router();
+  router.use("/merchants", adminAuth());
 
   router.get("/merchants", (_req, res) => {
     res.json({ merchants: repos.merchants.listAll() });

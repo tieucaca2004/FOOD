@@ -5,6 +5,26 @@ import { createServices } from "../../src/services/index.js";
 import { NullProvider } from "../../src/ai/NullProvider.js";
 import { createApp } from "../../src/api/app.js";
 import { BusinessRouter } from "../../src/router/businessRouter.js";
+import { config } from "../../src/config.js";
+
+// Automated tests must never reach a real external API, whatever a
+// developer's .env holds (config.js loads it). Messaging APIs are always
+// refused at the network layer; AI APIs are refused unless the process is one
+// of the live AI tests (platform/test/live/*), which set FOOD_LIVE_AI_TESTS=1.
+// The flag is read per request. Tests that exercise sending install their own
+// fake fetch on top of this one.
+const EXTERNAL_MESSAGING_API = /^https:\/\/(api\.telegram\.org|openapi\.zalo\.me)\//;
+const EXTERNAL_AI_API = /^https:\/\/(api\.openai\.com|api\.anthropic\.com|api\.deepseek\.com)\//;
+const realFetch = globalThis.fetch;
+globalThis.fetch = (input, options) => {
+  const url = String(input?.url ?? input);
+  if (EXTERNAL_MESSAGING_API.test(url)) return Promise.reject(new Error("external messaging API is blocked in tests"));
+  if (EXTERNAL_AI_API.test(url) && process.env.FOOD_LIVE_AI_TESTS !== "1") {
+    return Promise.reject(new Error("external AI API is blocked in tests (only the live AI tests set FOOD_LIVE_AI_TESTS=1)"));
+  }
+  return realFetch(input, options);
+};
+config.zaloAccessToken = "";
 
 // Fresh, isolated, in-memory DB per call — tests never share state and
 // never touch the real data/atieu.db file.

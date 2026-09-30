@@ -15,12 +15,28 @@ import { PlatformRouter } from "../../router/PlatformRouter.js";
 import { createPlatformApp } from "../../api/app.js";
 import { runNomNomDemoSeed } from "../../db/demoSeed.js";
 import { runPlatformSeed } from "../../db/seed.js";
+import { platformConfig } from "../../config.js";
 
 // Reuses A Tiểu's OWN test helper (test/helpers/testApp.js) completely
 // unmodified — this is exactly how a real "future merchant" onboarding
 // would plug in a second real module: build its own engine, hand it to a
 // factory, register it.
 import { buildTestContext as buildAtieuTestContext } from "../../../test/helpers/testApp.js";
+
+// A fake admin token, so tests never use a real PLATFORM_ADMIN_API_TOKEN from
+// a developer's .env. Tests that drive the admin API send ADMIN_AUTH_HEADER.
+export const TEST_ADMIN_TOKEN = "test-only-admin-token-" + "0".repeat(40);
+export const ADMIN_AUTH_HEADER = { authorization: `Bearer ${TEST_ADMIN_TOKEN}` };
+platformConfig.adminApiToken = TEST_ADMIN_TOKEN;
+
+// The testApp.js import above already blocks real external APIs; also clear
+// the platform's own messaging credentials so no test even attempts a send.
+platformConfig.zaloAccessToken = "";
+platformConfig.telegramBotToken = "";
+
+// Zalo fixtures in the suites are unsigned; the signature tests turn the
+// check back on explicitly.
+platformConfig.enableZaloSignatureCheck = false;
 
 const FREE_PLAN = { plan_id: "free", name: "Free", price: 0, trial_days: null };
 

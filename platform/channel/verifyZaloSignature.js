@@ -18,10 +18,13 @@ import { logger } from "../../src/logger.js";
 // confirmed against real OA webhook delivery before being relied on in
 // production.
 //
-// Disabled by default (PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK=false). Real
-// protection in the meantime is network-level allowlisting plus the
-// existing platform_webhook_events UNIQUE(message_id) idempotency guard
-// (prevents reprocessing, not signature forgery).
+// On unless PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK is explicitly "false": the
+// webhook is reachable publicly, and without this check anyone can post
+// events as any Zalo user. With the check on and no
+// PLATFORM_ZALO_OA_SECRET_KEY, every request is rejected. Turning it off is
+// an explicit operator decision (the server logs a warning at startup); the
+// platform_webhook_events UNIQUE(message_id) guard only prevents
+// reprocessing, not forgery.
 export function verifyPlatformZaloSignature(rawBody, headers) {
   if (!platformConfig.enableZaloSignatureCheck) return true;
   if (!platformConfig.zaloOaSecretKey) {

@@ -11,7 +11,9 @@ export const platformConfig = {
   zaloOaSecretKey: process.env.PLATFORM_ZALO_OA_SECRET_KEY || "",
   zaloSendRetries: Number(process.env.PLATFORM_ZALO_SEND_RETRIES || 3),
   zaloSendTimeoutMs: Number(process.env.PLATFORM_ZALO_SEND_TIMEOUT_MS || 8000),
-  enableZaloSignatureCheck: process.env.PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK === "true",
+  // Fail closed: the webhook is public, so only an explicit "false" turns
+  // signature checking off (see platform/channel/verifyZaloSignature.js).
+  enableZaloSignatureCheck: (process.env.PLATFORM_ENABLE_ZALO_SIGNATURE_CHECK ?? "").trim().toLowerCase() !== "false",
 
   // Telegram (Phase 8.x-T) — secondary channel. telegramBotToken is used by
   // platform/channel/telegram/telegramClient.js to send replies back.
@@ -45,6 +47,17 @@ export const platformConfig = {
   foodAgentLearningEnabled: process.env.FOOD_AGENT_LEARNING_ENABLED === "true",
   // stateless calls (store=false); reasoning items are echoed back encrypted between tool turns
   openaiIncludeReasoning: process.env.OPENAI_INCLUDE_REASONING !== "false",
+  // FOOD Agent model routing (platform/ai/fallbackProvider.js). With FOOD_AGENT_PRIMARY_MODEL set, the Agent calls
+  // DeepSeek (its OpenAI-compatible Responses API) first and OpenAI (FOOD_AGENT_FALLBACK_MODEL, default the model
+  // above) when a DeepSeek call fails; unset, the Agent is exactly the OpenAI-only Agent. Still OFF unless
+  // OPENAI_ENABLED=true. Keys only from the environment.
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY || "",
+  deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+  foodAgentPrimaryModel: process.env.FOOD_AGENT_PRIMARY_MODEL || "",
+  // the Agent's OpenAI model: the fallback, and the model that reads a customer's photo (never the DeepSeek model)
+  foodAgentFallbackModel: process.env.FOOD_AGENT_FALLBACK_MODEL || process.env.FOOD_AGENT_MODEL || process.env.OPENAI_MODEL || "gpt-5.6-terra",
+  // the primary's share of the time left for a model call; the fallback gets the rest of the same turn budget
+  foodAgentPrimaryTimeoutShare: Number(process.env.FOOD_AGENT_PRIMARY_TIMEOUT_SHARE || 0.6),
 
   // GPT concierge knowledge layers (independent, OFF by default; only used when the GPT concierge is on):
   // founder guidance (FK-1, APPROVED customer items) and food-name / alias recognition (APPROVED term relations).
@@ -120,6 +133,11 @@ export const platformConfig = {
   // Never hard-code trial length — configurable, applied when a plan row
   // doesn't specify its own trial_days.
   defaultTrialDays: Number(process.env.DEFAULT_TRIAL_DAYS || 14),
+
+  // Bearer token for the platform admin API (/api/platform/merchants*:
+  // listing, onboarding, status changes, merchant API-key issuance). Unset
+  // or shorter than 32 characters means the admin API refuses every request.
+  adminApiToken: process.env.PLATFORM_ADMIN_API_TOKEN || "",
 
   rateLimitWindowMs: Number(process.env.PLATFORM_RATE_LIMIT_WINDOW_MS || 60_000),
   rateLimitMax: Number(process.env.PLATFORM_RATE_LIMIT_MAX || 60),
