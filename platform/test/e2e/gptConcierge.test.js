@@ -268,13 +268,19 @@ test("OFF: without the concierge the platform is the deterministic one; the fact
     assert.match(await telegram("tìm quán bún cá ở Nha Trang"), /Em tìm thấy \d+ quán có dữ liệu phù hợp/);
     assert.equal(provider.calls.length, 0);
   }, { gptEnabled: false });
-  const saved = { e: platformConfig.openaiEnabled, k: platformConfig.openaiApiKey, m: platformConfig.openaiModel };
+  const saved = { e: platformConfig.openaiEnabled, k: platformConfig.openaiApiKey, m: platformConfig.openaiModel, pm: platformConfig.foodAgentPrimaryModel, dk: platformConfig.deepseekApiKey };
   try {
+    // the OpenAI-only Agent (no primary model; a developer's .env cannot leak DeepSeek in): flag + key + model
     for (const [e, k, m] of [[false, "k", "m"], [true, "", "m"], [true, "k", ""]]) {
-      Object.assign(platformConfig, { openaiEnabled: e, openaiApiKey: k, openaiModel: m });
+      Object.assign(platformConfig, { openaiEnabled: e, openaiApiKey: k, openaiModel: m, foodAgentPrimaryModel: "", deepseekApiKey: "" });
+      assert.equal(await createGptFoodConcierge({}), null);
+    }
+    // DeepSeek primary: still off without the flag, and off with neither the DeepSeek nor the OpenAI key
+    for (const [e, k, dk] of [[false, "k", "dk"], [true, "", ""]]) {
+      Object.assign(platformConfig, { openaiEnabled: e, openaiApiKey: k, openaiModel: "m", foodAgentPrimaryModel: "deepseek-flash", deepseekApiKey: dk });
       assert.equal(await createGptFoodConcierge({}), null);
     }
   } finally {
-    Object.assign(platformConfig, { openaiEnabled: saved.e, openaiApiKey: saved.k, openaiModel: saved.m });
+    Object.assign(platformConfig, { openaiEnabled: saved.e, openaiApiKey: saved.k, openaiModel: saved.m, foodAgentPrimaryModel: saved.pm, deepseekApiKey: saved.dk });
   }
 });

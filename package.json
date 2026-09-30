@@ -31,7 +31,8 @@
     "test:search-live": "node --test platform/test/live/searchLive.test.js",
     "bench:search": "node platform/test/bench/searchBenchmark.js",
     "test:image-live": "node --test platform/test/live/imageUnderstandingLive.test.js",
-    "test:claude-cli-live": "node --test platform/test/live/claudeCliLive.test.js"
+    "test:claude-cli-live": "node --test platform/test/live/claudeCliLive.test.js",
+    "test:deepseek-live": "node --test platform/test/live/deepseekLive.test.js"
   },
   "engines": {
     "node": ">=18"

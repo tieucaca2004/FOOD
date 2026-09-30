@@ -122,14 +122,17 @@ const pick = (req, name) => {
 };
 
 test("PROVIDER / FLAG: off -> no concierge; on without key -> no concierge, no crash; defaults from config", async () => {
-  const saved = { e: platformConfig.openaiEnabled, k: platformConfig.openaiApiKey };
+  const saved = { e: platformConfig.openaiEnabled, k: platformConfig.openaiApiKey, pm: platformConfig.foodAgentPrimaryModel, dk: platformConfig.deepseekApiKey };
   try {
-    Object.assign(platformConfig, { openaiEnabled: false, openaiApiKey: "sk-test-FAKE" });
+    // no model key at all (neither OpenAI nor DeepSeek), whatever a developer's .env holds
+    Object.assign(platformConfig, { openaiEnabled: false, openaiApiKey: "sk-test-FAKE", foodAgentPrimaryModel: "deepseek-flash", deepseekApiKey: "sk-deepseek-FAKE" });
     assert.equal(await createGptFoodConcierge({}), null);
-    Object.assign(platformConfig, { openaiEnabled: true, openaiApiKey: "" });
+    Object.assign(platformConfig, { openaiEnabled: true, openaiApiKey: "", foodAgentPrimaryModel: "deepseek-flash", deepseekApiKey: "" });
+    assert.equal(await createGptFoodConcierge({}), null);
+    Object.assign(platformConfig, { foodAgentPrimaryModel: "" });
     assert.equal(await createGptFoodConcierge({}), null);
   } finally {
-    Object.assign(platformConfig, { openaiEnabled: saved.e, openaiApiKey: saved.k });
+    Object.assign(platformConfig, { openaiEnabled: saved.e, openaiApiKey: saved.k, foodAgentPrimaryModel: saved.pm, deepseekApiKey: saved.dk });
   }
   assert.equal(platformConfig.openaiModel, process.env.OPENAI_MODEL || "gpt-5.6-terra");
   assert.equal(new OpenAIProvider({ apiKey: "" }).configured, false);

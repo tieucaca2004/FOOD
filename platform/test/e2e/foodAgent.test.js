@@ -81,13 +81,20 @@ const enterATieu = async (say) => {
   await say("Xem A Tiểu");
 };
 
-test("AGENT MODEL: the factory builds the Agent on FOOD_AGENT_MODEL (gpt-4o) with conversation history; default = OPENAI_MODEL; no network", async () => {
+test("AGENT MODEL: DeepSeek Flash primary with GPT-4o fallback when FOOD_AGENT_PRIMARY_MODEL is set; without it the OpenAI-only Agent on FOOD_AGENT_MODEL (gpt-4o); conversation history; no network", async () => {
   const saved = { ...platformConfig };
   try {
-    Object.assign(platformConfig, { openaiEnabled: true, openaiApiKey: "sk-test-FAKE-not-a-real-key", openaiModel: "gpt-5.6-terra", foodAgentModel: "gpt-4o", foodAgentHistoryTurns: 6, founderKnowledgeEnabled: false, foodAliasKnowledgeEnabled: false, searchIntelligenceEnabled: false });
+    // every routing value is pinned here, so a developer's .env (DEEPSEEK_API_KEY, FOOD_AGENT_PRIMARY_MODEL) cannot leak in
+    Object.assign(platformConfig, { openaiEnabled: true, openaiApiKey: "sk-test-FAKE-not-a-real-key", openaiModel: "gpt-5.6-terra", foodAgentModel: "gpt-4o", foodAgentPrimaryModel: "deepseek-flash", foodAgentFallbackModel: "gpt-4o", deepseekApiKey: "sk-deepseek-FAKE-not-a-real-key", foodAgentHistoryTurns: 6, founderKnowledgeEnabled: false, foodAliasKnowledgeEnabled: false, searchIntelligenceEnabled: false });
     const p = buildTestPlatform({ withAtieu: true });
+    const routed = await createGptFoodConcierge({ services: p.services, repos: p.repos, agentSearch: p.agentSearch, merchantRouter: p.merchantRouter, logger: null });
+    assert.equal(routed.provider.model, "deepseek-flash", "DeepSeek Flash is the Agent's primary");
+    assert.equal(routed.provider.primary.model, "deepseek-flash");
+    assert.equal(routed.provider.fallback.model, "gpt-4o", "GPT-4o is the fallback");
+    assert.equal(typeof routed.history, "function");
+    Object.assign(platformConfig, { foodAgentPrimaryModel: "", deepseekApiKey: "" });
     const agent = await createGptFoodConcierge({ services: p.services, repos: p.repos, agentSearch: p.agentSearch, merchantRouter: p.merchantRouter, logger: null });
-    assert.equal(agent.provider.model, "gpt-4o");
+    assert.equal(agent.provider.model, "gpt-4o", "no primary model: the OpenAI-only Agent on FOOD_AGENT_MODEL");
     assert.equal(typeof agent.history, "function");
     Object.assign(platformConfig, { openaiEnabled: false });
     assert.equal(await createGptFoodConcierge({ services: p.services, repos: p.repos, agentSearch: p.agentSearch, merchantRouter: p.merchantRouter }), null, "OPENAI_ENABLED=false: no Agent at all");
